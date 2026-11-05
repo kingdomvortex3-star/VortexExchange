@@ -5,11 +5,13 @@ import id.vortexexchange.util.ItemSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class MailboxManager {
@@ -44,8 +46,11 @@ public class MailboxManager {
         }
     }
 
-    public synchronized boolean store(UUID player, ItemStack item) {
-        if (player == null || item == null || item.getType().isAir()) {
+    public synchronized boolean store(
+            UUID player,
+            ItemStack item
+    ) {
+        if (player == null || !isValidItem(item)) {
             return false;
         }
 
@@ -59,12 +64,15 @@ public class MailboxManager {
                      database.getConnection().prepareStatement(sql)) {
 
             statement.setString(1, player.toString());
-            statement.setString(2, ItemSerializer.serialize(item.clone()));
+            statement.setString(
+                    2,
+                    ItemSerializer.serialize(item.clone())
+            );
             statement.setLong(3, System.currentTimeMillis());
 
             return statement.executeUpdate() == 1;
 
-        } catch (SQLException | IllegalArgumentException exception) {
+        } catch (SQLException | RuntimeException exception) {
             return false;
         }
     }
@@ -72,11 +80,11 @@ public class MailboxManager {
     public synchronized List<MailboxItem> getItems(UUID player)
             throws SQLException {
 
-        if (player == null) {
-            return new ArrayList<>();
-        }
-
         List<MailboxItem> items = new ArrayList<>();
+
+        if (player == null) {
+            return items;
+        }
 
         String sql = """
             SELECT id, item_data
@@ -97,14 +105,15 @@ public class MailboxManager {
                                 result.getString("item_data")
                         );
 
-                        if (item != null && !item.getType().isAir()) {
+                        if (isValidItem(item)) {
                             items.add(new MailboxItem(
                                     result.getInt("id"),
                                     item
                             ));
                         }
-                    } catch (IllegalArgumentException exception) {
-                        // Data rusak tetap disimpan agar bisa diperiksa admin.
+
+                    } catch (RuntimeException exception) {
+                        // Data rusak tetap disimpan untuk pemeriksaan admin.
                     }
                 }
             }
@@ -113,7 +122,9 @@ public class MailboxManager {
         return items;
     }
 
-    public synchronized boolean deleteItem(int id) throws SQLException {
+    public synchronized boolean deleteItem(int id)
+            throws SQLException {
+
         String sql = "DELETE FROM mailbox WHERE id = ?";
 
         try (PreparedStatement statement =
@@ -124,7 +135,9 @@ public class MailboxManager {
         }
     }
 
-    public synchronized int getItemCount(UUID player) throws SQLException {
+    public synchronized int getItemCount(UUID player)
+            throws SQLException {
+
         if (player == null) {
             return 0;
         }
@@ -151,10 +164,10 @@ public class MailboxManager {
             return;
         }
 
-        UUID uuid = player.getUniqueId();
-
         try {
-            List<MailboxItem> items = getItems(uuid);
+            List<MailboxItem> items = getItems(
+                    player.getUniqueId()
+            );
 
             int delivered = 0;
 
@@ -165,27 +178,36 @@ public class MailboxManager {
 
                 ItemStack item = mailboxItem.item();
 
-                if (item == null || item.getType().isAir()) {
+                if (!isValidItem(item)) {
                     continue;
                 }
 
-                var leftovers = player.getInventory().addItem(item.clone());
+                ItemStack[] inventoryBefore =
+                        player.getInventory().getStorageContents();
+
+                Map<Integer, ItemStack> leftovers =
+                        player.getInventory().addItem(item.clone());
+
+                boolean saved;
 
                 if (leftovers.isEmpty()) {
-                    if (deleteItem(mailboxItem.id())) {
-                        delivered++;
-                    }
-                    continue;
+                    saved = deleteItem(mailboxItem.id());
+                } else {
+                    saved = saveLeftovers(
+                            mailboxItem.id(),
+                            leftovers
+                    );
                 }
 
-                ItemStack remaining = leftovers.values()
-                        .iterator()
-                        .next();
+                if (!saved) {
+                    player.getInventory().setStorageContents(
+                            inventoryBefore
+                    );
 
-                if (remaining != null
-                        && !remaining.getType().isAir()) {
-                    updateItem(mailboxItem.id(), remaining);
+                    break;
                 }
+
+                delivered++;
             }
 
             if (delivered > 0 && player.isOnline()) {
@@ -195,19 +217,90 @@ public class MailboxManager {
                 );
             }
 
-        } catch (SQLException exception) {
+        } catch (SQLException | RuntimeException exception) {
             player.sendMessage(
-                    "§cGagal mengambil barang dari mailbox. "
+                    "§cGagal mengambil barang dari Mailbox. "
                             + "Silakan hubungi admin."
             );
         }
     }
 
-    private synchronized boolean updateItem(int id, ItemStack item)
-            throws SQLException {
+    private boolean saveLeftovers(
+            int id,
+            Map<Integer, ItemStack> leftovers
+    ) throws SQLException {
 
-        if (item == null || item.getType().isAir()) {
+        if (leftovers == null || leftovers.isEmpty()) {
             return deleteItem(id);
+        }
+
+        List<ItemStack> remainingItems =
+                new ArrayList<>(leftovers.values());
+
+        for (ItemStack item : remainingItems) {
+            if (!isValidItem(item)) {
+                return false;
+            }
+        }
+
+        ItemStack first = remainingItems.get(0);
+
+        if (!updateItem(id, first)) {
+            return false;
+        }
+
+        for (int i = 1; i < remainingItems.size(); i++) {
+            if (!store(
+                    getOwnerUUID(id),
+                    remainingItems.get(i)
+            )) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private UUID getOwnerUUID(int id) throws SQLException {
+        String sql = """
+            SELECT player_uuid
+            FROM mailbox
+            WHERE id = ?
+        """;
+
+        try (PreparedStatement statement =
+                     database.getConnection().prepareStatement(sql)) {
+
+            statement.setInt(1, id);
+
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    throw new SQLException(
+                            "Data Mailbox tidak ditemukan: " + id
+                    );
+                }
+
+                try {
+                    return UUID.fromString(
+                            result.getString("player_uuid")
+                    );
+                } catch (IllegalArgumentException exception) {
+                    throw new SQLException(
+                            "UUID Mailbox tidak valid.",
+                            exception
+                    );
+                }
+            }
+        }
+    }
+
+    private synchronized boolean updateItem(
+            int id,
+            ItemStack item
+    ) throws SQLException {
+
+        if (!isValidItem(item)) {
+            return false;
         }
 
         String sql = """
@@ -230,6 +323,27 @@ public class MailboxManager {
         }
     }
 
+    private boolean isValidItem(ItemStack item) {
+        return item != null
+                && !item.getType().isAir()
+                && item.getAmount() > 0;
+    }
+
     public record MailboxItem(int id, ItemStack item) {
+
+        public MailboxItem {
+            if (id <= 0 || item == null) {
+                throw new IllegalArgumentException(
+                        "Data Mailbox tidak valid."
+                );
+            }
+
+            item = item.clone();
+        }
+
+        @Override
+        public ItemStack item() {
+            return item.clone();
+        }
     }
-    }
+}
