@@ -12,6 +12,7 @@ import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.trade.TradeCommand;
 import id.vortexexchange.trade.TradeListener;
 import id.vortexexchange.trade.TradeManager;
+import id.vortexexchange.trade.TradeRecoveryManager;
 import id.vortexexchange.trade.TradeTransactionManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +30,7 @@ public final class VortexExchange extends JavaPlugin {
     private AuctionManager auctionManager;
     private AuctionExpiryManager expiryManager;
     private TradeManager tradeManager;
+    private TradeRecoveryManager recoveryManager;
 
     private BukkitTask expiryTask;
 
@@ -73,6 +75,11 @@ public final class VortexExchange extends JavaPlugin {
         expiryManager = new AuctionExpiryManager(this, auctionManager);
         tradeManager = new TradeManager();
 
+        recoveryManager = new TradeRecoveryManager(
+                this,
+                tradeManager
+        );
+
         if (!registerCommands()) {
             databaseManager.close();
             getServer().getPluginManager().disablePlugin(this);
@@ -88,6 +95,7 @@ public final class VortexExchange extends JavaPlugin {
         getLogger().info("Player Trading: ENABLED");
         getLogger().info("Mailbox: ENABLED");
         getLogger().info("Auction Expiry: ENABLED");
+        getLogger().info("Trade Recovery: ENABLED");
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
@@ -179,6 +187,15 @@ public final class VortexExchange extends JavaPlugin {
     public void onDisable() {
         if (expiryTask != null) {
             expiryTask.cancel();
+        }
+
+        if (recoveryManager != null) {
+            int recovered = recoveryManager.recoverAll();
+
+            getLogger().info(
+                    "Trade recovery selesai. Sesi dipulihkan: "
+                            + recovered
+            );
         }
 
         if (databaseManager != null) {
