@@ -16,10 +16,12 @@ commands:
     aliases:
       - auction
       - auctionhouse
+    permission: vortexexchange.use
 
   trade:
     description: Player Trading
     usage: /trade <player|accept|deny|toggle|money>
+    permission: vortexexchange.use
 
 permissions:
   vortexexchange.use:
