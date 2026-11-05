@@ -15,6 +15,7 @@ import id.vortexexchange.trade.TradeListener;
 import id.vortexexchange.trade.TradeManager;
 import id.vortexexchange.trade.TradeRecoveryManager;
 import id.vortexexchange.trade.TradeTransactionManager;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -33,6 +34,7 @@ public final class VortexExchange extends JavaPlugin {
     private AuctionExpiryManager expiryManager;
     private TradeManager tradeManager;
     private TradeRecoveryManager recoveryManager;
+    private LanguageManager languageManager;
 
     private BukkitTask expiryTask;
 
@@ -40,6 +42,8 @@ public final class VortexExchange extends JavaPlugin {
     public void onEnable() {
         instance = this;
         saveDefaultConfig();
+
+        languageManager = new LanguageManager(this);
 
         getLogger().info("Starting VortexExchange...");
 
@@ -111,6 +115,8 @@ public final class VortexExchange extends JavaPlugin {
         getLogger().info("Auction Expiry: ENABLED");
         getLogger().info("Trade Storage: ENABLED");
         getLogger().info("Trade Recovery: ENABLED");
+        getLogger().info("Language: " +
+                getConfig().getString("settings.language", "id"));
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
@@ -246,5 +252,9 @@ public final class VortexExchange extends JavaPlugin {
 
     public TradeManager getTradeManager() {
         return tradeManager;
+    }
+
+    public LanguageManager getLanguageManager() {
+        return languageManager;
     }
 }
