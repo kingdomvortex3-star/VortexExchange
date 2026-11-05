@@ -7,7 +7,7 @@ settings:
 auction:
   enabled: true
   max-listings-per-player: 10
-  listing-duration-hours: 48
+  listing-duration-hours: 168
   minimum-price: 1
   tax-percent: 0
   expired-items-return: true
