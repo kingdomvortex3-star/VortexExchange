@@ -5,6 +5,8 @@ import id.vortexexchange.auction.AuctionCommand;
 import id.vortexexchange.auction.AuctionListener;
 import id.vortexexchange.auction.AuctionManager;
 import id.vortexexchange.database.DatabaseManager;
+import id.vortexexchange.database.MailboxManager;
+import id.vortexexchange.database.MailboxListener;
 import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.trade.TradeCommand;
 import id.vortexexchange.trade.TradeListener;
@@ -20,6 +22,7 @@ public final class VortexExchange extends JavaPlugin {
     private static VortexExchange instance;
 
     private DatabaseManager databaseManager;
+    private MailboxManager mailboxManager;
     private EconomyManager economyManager;
     private AuctionManager auctionManager;
     private TradeManager tradeManager;
@@ -36,9 +39,13 @@ public final class VortexExchange extends JavaPlugin {
 
         try {
             databaseManager.connect();
+
+            mailboxManager = new MailboxManager(databaseManager);
+            mailboxManager.initialize();
+
         } catch (SQLException exception) {
             getLogger().severe(
-                    "Database gagal terhubung: "
+                    "Database gagal diinisialisasi: "
                             + exception.getMessage()
             );
 
@@ -60,19 +67,24 @@ public final class VortexExchange extends JavaPlugin {
         auctionManager = new AuctionManager(databaseManager);
         tradeManager = new TradeManager();
 
-        registerCommands();
+        if (!registerCommands()) {
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         registerListeners();
 
         getLogger().info("--------------------------------");
         getLogger().info("VortexExchange berhasil diaktifkan!");
         getLogger().info("Auction House: ENABLED");
         getLogger().info("Player Trading: ENABLED");
+        getLogger().info("Mailbox: ENABLED");
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
     }
 
-    private void registerCommands() {
+    private boolean registerCommands() {
         PluginCommand auctionCommand = getCommand("ah");
         PluginCommand tradeCommand = getCommand("trade");
 
@@ -80,9 +92,7 @@ public final class VortexExchange extends JavaPlugin {
             getLogger().severe(
                     "Command ah atau trade tidak ditemukan di plugin.yml!"
             );
-
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+            return false;
         }
 
         auctionCommand.setExecutor(
@@ -92,6 +102,8 @@ public final class VortexExchange extends JavaPlugin {
         tradeCommand.setExecutor(
                 new TradeCommand(this, tradeManager, economyManager)
         );
+
+        return true;
     }
 
     private void registerListeners() {
@@ -119,6 +131,11 @@ public final class VortexExchange extends JavaPlugin {
                 ),
                 this
         );
+
+        getServer().getPluginManager().registerEvents(
+                new MailboxListener(mailboxManager),
+                this
+        );
     }
 
     @Override
@@ -136,6 +153,10 @@ public final class VortexExchange extends JavaPlugin {
 
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
+    }
+
+    public MailboxManager getMailboxManager() {
+        return mailboxManager;
     }
 
     public EconomyManager getEconomyManager() {
