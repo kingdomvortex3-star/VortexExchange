@@ -132,10 +132,15 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        TradeRequest request = tradeManager.getRequest(playerId);
+        int expireSeconds = Math.max(
+                1,
+                plugin.getConfig().getInt("trade.request-expire-seconds", 60)
+        );
+
+        TradeRequest request = tradeManager.getRequest(playerId, expireSeconds);
 
         if (request == null) {
-            player.sendMessage(color("&cKamu tidak memiliki permintaan trade."));
+            player.sendMessage(color("&cPermintaan trade tidak ada atau sudah kedaluwarsa."));
             return;
         }
 
@@ -147,7 +152,7 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        TradeSession session = tradeManager.acceptRequest(playerId);
+        TradeSession session = tradeManager.acceptRequest(playerId, expireSeconds);
 
         if (session == null) {
             player.sendMessage(color("&cPermintaan trade gagal diterima."));
@@ -164,10 +169,18 @@ public class TradeCommand implements CommandExecutor {
     }
 
     private void deny(Player player) {
-        TradeRequest request = tradeManager.getRequest(player.getUniqueId());
+        int expireSeconds = Math.max(
+                1,
+                plugin.getConfig().getInt("trade.request-expire-seconds", 60)
+        );
+
+        TradeRequest request = tradeManager.getRequest(
+                player.getUniqueId(),
+                expireSeconds
+        );
 
         if (request == null) {
-            player.sendMessage(color("&cKamu tidak memiliki permintaan trade."));
+            player.sendMessage(color("&cKamu tidak memiliki permintaan trade aktif."));
             return;
         }
 
@@ -252,8 +265,9 @@ public class TradeCommand implements CommandExecutor {
         player.sendMessage(color("&aPenawaran uang diatur menjadi &b"
                 + economyManager.format(amount) + "&a."));
 
-        UUID opponentId = session.getOpponent(player.getUniqueId());
-        Player opponent = Bukkit.getPlayer(opponentId);
+        Player opponent = Bukkit.getPlayer(
+                session.getOpponent(player.getUniqueId())
+        );
 
         if (opponent != null && opponent.isOnline()) {
             opponent.sendMessage(color("&b" + player.getName()
@@ -273,7 +287,7 @@ public class TradeCommand implements CommandExecutor {
 
     private void refreshTrade(TradeSession session) {
         refreshPlayer(session.getPlayerOne(), session);
-        refreshPlayer(session.getOpponent(session.getPlayerOne()), session);
+        refreshPlayer(session.getPlayerTwo(), session);
     }
 
     private void refreshPlayer(UUID playerId, TradeSession session) {
