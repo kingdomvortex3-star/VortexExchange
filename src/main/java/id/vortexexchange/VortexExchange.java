@@ -85,6 +85,15 @@ public final class VortexExchange extends JavaPlugin {
                 tradeManager
         );
 
+        getLogger().info("Memeriksa sesi trade yang tersimpan...");
+
+        int recovered = recoveryManager.recoverAll();
+
+        getLogger().info(
+                "Startup trade recovery selesai. Sesi dipulihkan: "
+                        + recovered
+        );
+
         if (!registerCommands()) {
             databaseManager.close();
             getServer().getPluginManager().disablePlugin(this);
@@ -101,6 +110,7 @@ public final class VortexExchange extends JavaPlugin {
         getLogger().info("Mailbox: ENABLED");
         getLogger().info("Auction Expiry: ENABLED");
         getLogger().info("Trade Storage: ENABLED");
+        getLogger().info("Trade Recovery: ENABLED");
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
@@ -198,7 +208,7 @@ public final class VortexExchange extends JavaPlugin {
             int recovered = recoveryManager.recoverAll();
 
             getLogger().info(
-                    "Trade recovery selesai. Sesi dipulihkan: "
+                    "Shutdown trade recovery selesai. Sesi dipulihkan: "
                             + recovered
             );
         }
