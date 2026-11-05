@@ -17,6 +17,7 @@ public class MailboxListener implements Listener {
 
     public MailboxListener(MailboxManager mailboxManager) {
         this.mailboxManager = mailboxManager;
+
         this.plugin = JavaPlugin.getProvidingPlugin(
                 MailboxListener.class
         );
@@ -28,51 +29,55 @@ public class MailboxListener implements Listener {
 
         player.getScheduler().runDelayed(
                 plugin,
-                task -> {
-                    if (!player.isOnline()) {
-                        return;
-                    }
-
-                    mailboxManager.deliver(player);
-
-                    if (!player.isOnline()) {
-                        return;
-                    }
-
-                    try {
-                        int count = mailboxManager.getItemCount(
-                                player.getUniqueId()
-                        );
-
-                        if (count > 0) {
-                            player.sendMessage(
-                                    ChatColor.GREEN
-                                            + "Kamu masih memiliki "
-                                            + count
-                                            + " barang di Mailbox!"
-                            );
-
-                            player.sendMessage(
-                                    ChatColor.GRAY
-                                            + "Kosongkan inventory untuk menerima semua barang."
-                            );
-                        }
-                    } catch (SQLException exception) {
-                        plugin.getLogger().severe(
-                                "Gagal memeriksa mailbox pemain "
-                                        + player.getUniqueId()
-                                        + ": "
-                                        + exception.getMessage()
-                        );
-
-                        player.sendMessage(
-                                ChatColor.RED
-                                        + "Mailbox gagal diperiksa. Hubungi admin."
-                        );
-                    }
-                },
+                task -> processMailbox(player),
                 null,
                 40L
         );
     }
-          }
+
+    private void processMailbox(Player player) {
+        if (!player.isOnline()) {
+            return;
+        }
+
+        mailboxManager.deliver(player);
+
+        if (!player.isOnline()) {
+            return;
+        }
+
+        try {
+            int count = mailboxManager.getItemCount(
+                    player.getUniqueId()
+            );
+
+            if (count > 0) {
+                player.sendMessage(
+                        ChatColor.GREEN
+                                + "Kamu masih memiliki "
+                                + count
+                                + " barang di Mailbox!"
+                );
+
+                player.sendMessage(
+                        ChatColor.GRAY
+                                + "Kosongkan inventory untuk menerima "
+                                + "semua barang."
+                );
+            }
+
+        } catch (SQLException exception) {
+            plugin.getLogger().severe(
+                    "Gagal memeriksa mailbox pemain "
+                            + player.getUniqueId()
+                            + ": "
+                            + exception.getMessage()
+            );
+
+            player.sendMessage(
+                    ChatColor.RED
+                            + "Mailbox gagal diperiksa. Hubungi admin."
+            );
+        }
+    }
+}
