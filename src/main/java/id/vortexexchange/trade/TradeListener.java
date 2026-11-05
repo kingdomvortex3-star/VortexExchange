@@ -68,7 +68,9 @@ public class TradeListener implements Listener {
             return;
         }
 
-        if (slot >= event.getView().getTopInventory().getSize()) {
+        int topSize = event.getView().getTopInventory().getSize();
+
+        if (slot >= topSize) {
             if (event.getClickedInventory() == player.getInventory()) {
                 addOffer(player, session, event);
             }
@@ -96,6 +98,7 @@ public class TradeListener implements Listener {
             InventoryClickEvent event
     ) {
         if (!plugin.getConfig().getBoolean("trade.allow-items", true)) {
+            player.sendMessage(color("&cPenawaran item sedang dinonaktifkan."));
             return;
         }
 
@@ -111,18 +114,27 @@ public class TradeListener implements Listener {
             return;
         }
 
-        List<ItemStack> items = session.getItems(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+
+        List<ItemStack> items = session.getItems(uuid);
 
         if (items.size() >= OWN_SLOTS.length) {
             player.sendMessage(color("&cSlot penawaran sudah penuh."));
             return;
         }
 
-        items.add(clicked.clone());
+        ItemStack offeredItem = clicked.clone();
+
+        if (!session.addItem(uuid, offeredItem)) {
+            player.sendMessage(color("&cItem gagal ditambahkan ke penawaran."));
+            return;
+        }
+
         event.setCurrentItem(null);
 
-        session.setItems(player.getUniqueId(), items);
         refresh(session);
+
+        player.sendMessage(color("&aItem berhasil ditambahkan ke penawaran."));
     }
 
     private void removeOffer(
@@ -139,15 +151,19 @@ public class TradeListener implements Listener {
             }
         }
 
-        List<ItemStack> items = session.getItems(player.getUniqueId());
-
-        if (index < 0 || index >= items.size()) {
+        if (index < 0) {
             return;
         }
 
-        ItemStack item = items.remove(index);
+        UUID uuid = player.getUniqueId();
 
-        var leftovers = player.getInventory().addItem(item);
+        ItemStack item = session.removeItem(uuid, index);
+
+        if (item == null) {
+            return;
+        }
+
+        var leftovers = player.getInventory().addItem(item.clone());
 
         leftovers.values().forEach(leftover ->
                 player.getWorld().dropItemNaturally(
@@ -156,17 +172,24 @@ public class TradeListener implements Listener {
                 )
         );
 
-        session.setItems(player.getUniqueId(), items);
         refresh(session);
     }
 
     private void toggleReady(Player player, TradeSession session) {
+        if (!session.isActive()) {
+            return;
+        }
+
         UUID uuid = player.getUniqueId();
 
-        session.setReady(uuid, !session.isReady(uuid));
+        session.toggleReady(uuid);
 
-        if (session.bothReady()) {
-            notifyPlayers(session, "&aKedua pemain READY! Memproses transaksi...");
+        if (session.areBothReady()) {
+            notifyPlayers(
+                    session,
+                    "&aKedua pemain READY! Memproses transaksi..."
+            );
+
             transactionManager.complete(session);
         } else {
             notifyPlayers(
@@ -188,6 +211,7 @@ public class TradeListener implements Listener {
             return;
         }
 
+        session.setCancelled(true);
         tradeManager.removeSession(session);
 
         returnItems(
@@ -215,10 +239,9 @@ public class TradeListener implements Listener {
             }
 
             if (player == null || !player.isOnline()) {
-                if (!mailboxManager.store(uuid, item)) {
+                if (!mailboxManager.store(uuid, item.clone())) {
                     plugin.getLogger().severe(
-                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: "
-                                    + uuid
+                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: " + uuid
                     );
                 }
                 continue;
@@ -264,7 +287,7 @@ public class TradeListener implements Listener {
         )) {
             Player player = Bukkit.getPlayer(uuid);
 
-            if (player != null) {
+            if (player != null && player.isOnline()) {
                 player.sendMessage(color(message));
             }
         }
@@ -274,6 +297,7 @@ public class TradeListener implements Listener {
         Player player = Bukkit.getPlayer(uuid);
 
         if (player != null
+                && player.isOnline()
                 && player.getOpenInventory().getTopInventory()
                 .getHolder() instanceof TradeGUI) {
             player.closeInventory();
@@ -297,21 +321,28 @@ public class TradeListener implements Listener {
         TradeSession session = gui.getSession();
 
         if (session.isActive()) {
-            cancelTrade(session, "&cTrade dibatalkan karena GUI ditutup.");
+            cancelTrade(
+                    session,
+                    "&cTrade dibatalkan karena GUI ditutup."
+            );
         }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        TradeSession session = tradeManager.getSession(
-                event.getPlayer().getUniqueId()
-        );
+        UUID uuid = event.getPlayer().getUniqueId();
+
+        TradeSession session = tradeManager.getSession(uuid);
 
         if (session != null && session.isActive()) {
-            cancelTrade(session, "&cTrade dibatalkan karena pemain disconnect.");
+            cancelTrade(
+                    session,
+                    "&cTrade dibatalkan karena pemain disconnect."
+            );
         }
 
-        tradeManager.removeRequests(event.getPlayer().getUniqueId());
+        tradeManager.removeRequests(uuid);
+        tradeManager.clearPlayer(uuid);
     }
 
     private String color(String message) {
