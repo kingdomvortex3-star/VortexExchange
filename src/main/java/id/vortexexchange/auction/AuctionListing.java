@@ -24,6 +24,43 @@ public class AuctionListing {
             long createdAt,
             long expiresAt
     ) {
+        if (id <= 0) {
+            throw new IllegalArgumentException(
+                    "ID listing harus lebih dari 0."
+            );
+        }
+
+        if (sellerUUID == null) {
+            throw new IllegalArgumentException(
+                    "UUID penjual tidak boleh kosong."
+            );
+        }
+
+        if (sellerName == null || sellerName.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Nama penjual tidak valid."
+            );
+        }
+
+        if (item == null || item.getType().isAir()
+                || item.getAmount() <= 0) {
+            throw new IllegalArgumentException(
+                    "Item listing tidak valid."
+            );
+        }
+
+        if (!Double.isFinite(price) || price <= 0) {
+            throw new IllegalArgumentException(
+                    "Harga listing tidak valid."
+            );
+        }
+
+        if (createdAt <= 0 || expiresAt <= createdAt) {
+            throw new IllegalArgumentException(
+                    "Waktu listing tidak valid."
+            );
+        }
+
         this.id = id;
         this.sellerUUID = sellerUUID;
         this.sellerName = sellerName;
@@ -63,5 +100,12 @@ public class AuctionListing {
 
     public boolean isExpired() {
         return System.currentTimeMillis() >= expiresAt;
+    }
+
+    public long getRemainingTime() {
+        return Math.max(
+                0L,
+                expiresAt - System.currentTimeMillis()
+        );
     }
 }
