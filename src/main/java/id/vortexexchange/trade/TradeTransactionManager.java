@@ -27,7 +27,8 @@ public class TradeTransactionManager {
     }
 
     public synchronized boolean complete(TradeSession session) {
-        if (session == null || !session.isActive()
+        if (session == null
+                || !session.isActive()
                 || !session.bothReady()) {
             return false;
         }
@@ -52,7 +53,8 @@ public class TradeTransactionManager {
 
         if (!Double.isFinite(oneMoney)
                 || !Double.isFinite(twoMoney)
-                || oneMoney < 0 || twoMoney < 0) {
+                || oneMoney < 0
+                || twoMoney < 0) {
             return fail(session, "Penawaran uang tidak valid.");
         }
 
@@ -64,11 +66,11 @@ public class TradeTransactionManager {
         List<ItemStack> oneItems = session.getItems(oneId);
         List<ItemStack> twoItems = session.getItems(twoId);
 
-        if (!economy.withdraw(one, oneMoney)) {
+        if (!withdraw(one, oneMoney)) {
             return fail(session, "Gagal mengambil uang pemain pertama.");
         }
 
-        if (!economy.withdraw(two, twoMoney)) {
+        if (!withdraw(two, twoMoney)) {
             if (!refund(one, oneMoney)) {
                 logRecovery(oneId, oneMoney);
             }
@@ -76,49 +78,99 @@ public class TradeTransactionManager {
             return fail(session, "Gagal mengambil uang pemain kedua.");
         }
 
-        boolean firstDeposit = economy.deposit(one, twoMoney);
+        if (!deposit(one, twoMoney)) {
+            boolean refundOne = refund(one, oneMoney);
+            boolean refundTwo = refund(two, twoMoney);
 
-        if (!firstDeposit) {
-            refund(one, oneMoney);
-            refund(two, twoMoney);
-            return fail(session, "Gagal mengirim uang kepada pemain pertama.");
-        }
-
-        boolean secondDeposit = economy.deposit(two, oneMoney);
-
-        if (!secondDeposit) {
-            boolean rollbackOne = economy.withdraw(one, twoMoney);
-            boolean rollbackTwo = economy.deposit(one, oneMoney);
-            boolean rollbackThree = economy.deposit(two, twoMoney);
-
-            if (!rollbackOne || !rollbackTwo || !rollbackThree) {
-                plugin.getLogger().severe(
-                        "ROLLBACK TRADE GAGAL! Perlu pemeriksaan manual. "
-                                + oneId + " <-> " + twoId
-                );
+            if (!refundOne) {
+                logRecovery(oneId, oneMoney);
             }
 
-            return fail(session, "Pembayaran gagal. Periksa saldo jika berubah.");
+            if (!refundTwo) {
+                logRecovery(twoId, twoMoney);
+            }
+
+            return fail(session, "Pembayaran pertama gagal.");
         }
 
-        tradeItems(one, twoItems);
-        tradeItems(two, oneItems);
+        if (!deposit(two, oneMoney)) {
+            boolean reversePayment = withdraw(one, twoMoney);
+
+            if (reversePayment) {
+                boolean refundOne = refund(one, oneMoney);
+                boolean refundTwo = refund(two, twoMoney);
+
+                if (!refundOne) {
+                    logRecovery(oneId, oneMoney);
+                }
+
+                if (!refundTwo) {
+                    logRecovery(twoId, twoMoney);
+                }
+            } else {
+                boolean refundTwo = refund(two, twoMoney);
+
+                plugin.getLogger().severe(
+                        "ROLLBACK TRADE GAGAL! "
+                                + "Pemain pertama: " + oneId
+                                + ", pemain kedua: " + twoId
+                                + ", uang pertama: " + oneMoney
+                                + ", uang kedua: " + twoMoney
+                );
+
+                if (!refundTwo) {
+                    logRecovery(twoId, twoMoney);
+                }
+            }
+
+            return fail(
+                    session,
+                    "Pembayaran kedua gagal. Periksa saldo dan hubungi admin jika berubah."
+            );
+        }
 
         tradeManager.completeSession(session);
+
+        deliverItems(one, twoItems);
+        deliverItems(two, oneItems);
 
         one.sendMessage("§a§lTRADE BERHASIL!");
         two.sendMessage("§a§lTRADE BERHASIL!");
 
-        one.sendMessage("§7Transaksi dengan §b" + two.getName() + " §7selesai.");
-        two.sendMessage("§7Transaksi dengan §b" + one.getName() + " §7selesai.");
+        one.sendMessage(
+                "§7Transaksi dengan §b" + two.getName() + " §7selesai."
+        );
+
+        two.sendMessage(
+                "§7Transaksi dengan §b" + one.getName() + " §7selesai."
+        );
 
         one.closeInventory();
         two.closeInventory();
 
+        plugin.getLogger().info(
+                "Trade berhasil: " + oneId + " <-> " + twoId
+        );
+
         return true;
     }
 
-    private void tradeItems(Player receiver, List<ItemStack> items) {
+    private boolean withdraw(Player player, double amount) {
+        return amount == 0 || economy.withdraw(player, amount);
+    }
+
+    private boolean deposit(Player player, double amount) {
+        return amount == 0 || economy.deposit(player, amount);
+    }
+
+    private boolean refund(Player player, double amount) {
+        return amount == 0 || economy.deposit(player, amount);
+    }
+
+    private void deliverItems(
+            Player receiver,
+            List<ItemStack> items
+    ) {
         for (ItemStack item : items) {
             if (item == null || item.getType().isAir()) {
                 continue;
@@ -133,10 +185,6 @@ public class TradeTransactionManager {
                     )
             );
         }
-    }
-
-    private boolean refund(Player player, double amount) {
-        return amount <= 0 || economy.deposit(player, amount);
     }
 
     private boolean fail(TradeSession session, String reason) {
@@ -156,7 +204,8 @@ public class TradeTransactionManager {
 
     private void logRecovery(UUID player, double amount) {
         plugin.getLogger().severe(
-                "GAGAL REFUND TRADE: player=" + player
+                "REFUND TRADE PERLU PEMERIKSAAN MANUAL: "
+                        + "player=" + player
                         + ", amount=" + amount
         );
     }
