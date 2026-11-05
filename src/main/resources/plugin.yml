@@ -1,0 +1,31 @@
+
+name: VortexExchange
+version: '${version}'
+main: id.vortexexchange.VortexExchange
+api-version: '26.3'
+author: VortexTeam
+description: Auction House and Player Trading
+
+depend:
+  - Vault
+
+commands:
+  ah:
+    description: Auction House
+    usage: /ah [sell <price>]
+    aliases:
+      - auction
+      - auctionhouse
+
+  trade:
+    description: Player Trading
+    usage: /trade <player|accept|deny|toggle|money>
+
+permissions:
+  vortexexchange.use:
+    description: Use Auction House and Trading
+    default: true
+
+  vortexexchange.admin:
+    description: Manage VortexExchange
+    default: op
