@@ -1,6 +1,9 @@
 
 package id.vortexexchange.trade;
 
+import id.vortexexchange.database.TradeStorage;
+
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
@@ -9,10 +12,87 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TradeManager {
 
-    private final Map<UUID, TradeRequest> requests = new ConcurrentHashMap<>();
-    private final Map<UUID, TradeSession> sessions = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> requestCooldowns = new ConcurrentHashMap<>();
-    private final Map<UUID, Boolean> disabledRequests = new ConcurrentHashMap<>();
+    private final Map<UUID, TradeRequest> requests =
+            new ConcurrentHashMap<>();
+
+    private final Map<UUID, TradeSession> sessions =
+            new ConcurrentHashMap<>();
+
+    private final Map<UUID, Long> requestCooldowns =
+            new ConcurrentHashMap<>();
+
+    private final Map<UUID, Boolean> disabledRequests =
+            new ConcurrentHashMap<>();
+
+    private volatile TradeStorage storage;
+
+    public TradeManager() {
+    }
+
+    public TradeManager(TradeStorage storage) {
+        this.storage = storage;
+    }
+
+    public void setStorage(TradeStorage storage) {
+        this.storage = storage;
+    }
+
+    public boolean saveSession(TradeSession session) {
+        if (session == null || !session.isActive()) {
+            return false;
+        }
+
+        TradeStorage currentStorage = storage;
+
+        if (currentStorage == null) {
+            return false;
+        }
+
+        try {
+            currentStorage.save(session);
+            return true;
+        } catch (SQLException exception) {
+            return false;
+        }
+    }
+
+    public boolean deleteStoredSession(TradeSession session) {
+        if (session == null) {
+            return false;
+        }
+
+        TradeStorage currentStorage = storage;
+
+        if (currentStorage == null) {
+            return false;
+        }
+
+        try {
+            return currentStorage.delete(session);
+        } catch (SQLException exception) {
+            return false;
+        }
+    }
+
+    public synchronized boolean registerRecoveredSession(
+            TradeSession session
+    ) {
+        if (session == null || !session.isActive()) {
+            return false;
+        }
+
+        UUID one = session.getPlayerOne();
+        UUID two = session.getPlayerTwo();
+
+        if (sessions.containsKey(one) || sessions.containsKey(two)) {
+            return false;
+        }
+
+        sessions.put(one, session);
+        sessions.put(two, session);
+
+        return true;
+    }
 
     public boolean sendRequest(UUID sender, UUID target) {
         if (sender == null || target == null || sender.equals(target)) {
@@ -71,7 +151,10 @@ public class TradeManager {
         return acceptRequest(target, 60);
     }
 
-    public synchronized TradeSession acceptRequest(UUID target, int expireSeconds) {
+    public synchronized TradeSession acceptRequest(
+            UUID target,
+            int expireSeconds
+    ) {
         TradeRequest request = getRequest(target, expireSeconds);
 
         if (request == null) {
@@ -85,9 +168,13 @@ public class TradeManager {
             return null;
         }
 
-        requests.remove(target, request);
-
         TradeSession session = new TradeSession(sender, target);
+
+        if (storage != null && !saveSession(session)) {
+            return null;
+        }
+
+        requests.remove(target, request);
 
         sessions.put(sender, session);
         sessions.put(target, session);
