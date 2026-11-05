@@ -43,6 +43,11 @@ public class AuctionCommand implements CommandExecutor {
             return true;
         }
 
+        if (!plugin.getConfig().getBoolean("auction.enabled", true)) {
+            player.sendMessage(color("&cAuction House sedang dinonaktifkan."));
+            return true;
+        }
+
         if (args.length == 0) {
             openAuction(player);
             return true;
@@ -63,7 +68,6 @@ public class AuctionCommand implements CommandExecutor {
                     auctionManager.getListings();
 
             AuctionGUI gui = new AuctionGUI(listings);
-
             player.openInventory(gui.getInventory());
 
         } catch (SQLException exception) {
@@ -98,6 +102,10 @@ public class AuctionCommand implements CommandExecutor {
                 "auction.minimum-price", 1
         );
 
+        if (!Double.isFinite(minimum) || minimum < 0) {
+            minimum = 1;
+        }
+
         if (price < minimum) {
             player.sendMessage(color(
                     "&cHarga minimum: " + minimum
@@ -107,22 +115,47 @@ public class AuctionCommand implements CommandExecutor {
 
         ItemStack hand = player.getInventory().getItemInMainHand();
 
-        if (hand.getType() == Material.AIR) {
+        if (hand == null || hand.getType() == Material.AIR) {
             player.sendMessage(color("&cPegang barang yang ingin dijual."));
             return;
         }
 
-        ItemStack item = hand.clone();
-        long duration = plugin.getConfig().getLong(
-                "auction.listing-duration-hours", 48
+        int maximumListings = plugin.getConfig().getInt(
+                "auction.max-listings-per-player", 10
         );
 
-        if (duration <= 0 || duration > Long.MAX_VALUE / 3600000L) {
-            player.sendMessage(color("&cDurasi listing tidak valid."));
-            return;
+        if (maximumListings < 1) {
+            maximumListings = 1;
         }
 
         try {
+            if (!player.hasPermission("vortexexchange.admin")) {
+                int currentListings = auctionManager.getPlayerListingCount(
+                        player.getUniqueId()
+                );
+
+                if (currentListings >= maximumListings) {
+                    player.sendMessage(color(
+                            "&cKamu sudah mencapai batas maksimal "
+                                    + maximumListings
+                                    + " listing aktif!"
+                    ));
+                    return;
+                }
+            }
+
+            long duration = plugin.getConfig().getLong(
+                    "auction.listing-duration-hours", 48
+            );
+
+            if (duration <= 0
+                    || duration > Long.MAX_VALUE / 3600000L) {
+                player.sendMessage(color("&cDurasi listing tidak valid."));
+                return;
+            }
+
+            ItemStack item = hand.clone();
+
             auctionManager.createListing(
                     player.getUniqueId(),
                     player.getName(),
@@ -136,9 +169,13 @@ public class AuctionCommand implements CommandExecutor {
             player.sendMessage(color(
                     "&aBarang berhasil dipasang di Auction House!"
             ));
-
+            player.sendMessage(color("&7Harga: &b" + price));
             player.sendMessage(color(
-                    "&7Harga: &b" + price
+                    "&7Listing aktif: &b"
+                            + auctionManager.getPlayerListingCount(
+                                    player.getUniqueId()
+                            )
+                            + "/" + maximumListings
             ));
 
         } catch (SQLException | RuntimeException exception) {
