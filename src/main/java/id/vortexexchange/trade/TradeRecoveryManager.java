@@ -2,11 +2,10 @@
 package id.vortexexchange.trade;
 
 import id.vortexexchange.VortexExchange;
-import id.vortexexchange.util.ItemSerializer;
+import id.vortexexchange.database.TradeStorage;
+import id.vortexexchange.database.MailboxManager;
 import org.bukkit.inventory.ItemStack;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +14,8 @@ public class TradeRecoveryManager {
 
     private final VortexExchange plugin;
     private final TradeManager tradeManager;
+    private final TradeStorage tradeStorage;
+    private final MailboxManager mailboxManager;
 
     public TradeRecoveryManager(
             VortexExchange plugin,
@@ -22,34 +23,38 @@ public class TradeRecoveryManager {
     ) {
         this.plugin = plugin;
         this.tradeManager = tradeManager;
+        this.tradeStorage = plugin.getTradeStorage();
+        this.mailboxManager = plugin.getMailboxManager();
     }
 
     public synchronized int recoverAll() {
-        if (plugin.getDatabaseManager() == null) {
+        if (tradeStorage == null || mailboxManager == null) {
             plugin.getLogger().severe(
-                    "Trade recovery gagal: database tidak tersedia."
+                    "Trade recovery gagal: storage atau mailbox tidak tersedia."
             );
             return 0;
         }
 
-        Connection connection =
-                plugin.getDatabaseManager().getConnection();
+        List<TradeStorage.StoredTrade> storedTrades;
 
-        if (connection == null) {
+        try {
+            storedTrades = tradeStorage.loadAll();
+        } catch (SQLException exception) {
             plugin.getLogger().severe(
-                    "Trade recovery gagal: koneksi database null."
+                    "Gagal membaca sesi trade: "
+                            + exception.getMessage()
             );
             return 0;
         }
 
         int recovered = 0;
 
-        for (TradeSession session : tradeManager.getActiveSessions()) {
-            if (session == null || !session.isActive()) {
+        for (TradeStorage.StoredTrade trade : storedTrades) {
+            if (trade == null) {
                 continue;
             }
 
-            if (recoverSession(connection, session)) {
+            if (recoverStoredTrade(trade)) {
                 recovered++;
             }
         }
@@ -57,71 +62,61 @@ public class TradeRecoveryManager {
         plugin.getLogger().info(
                 "Trade recovery selesai. Sesi dipulihkan: "
                         + recovered
+                        + "/" + storedTrades.size()
         );
 
         return recovered;
     }
 
-    private boolean recoverSession(
-            Connection connection,
-            TradeSession session
+    private boolean recoverStoredTrade(
+            TradeStorage.StoredTrade trade
     ) {
-        UUID one = session.getPlayerOne();
-        UUID two = session.getPlayerTwo();
+        UUID one = trade.getPlayerOne();
+        UUID two = trade.getPlayerTwo();
 
         if (one == null || two == null || one.equals(two)) {
             plugin.getLogger().severe(
-                    "Trade recovery gagal: UUID pemain tidak valid."
+                    "Recovery gagal: UUID pemain tidak valid."
             );
             return false;
         }
 
-        List<ItemStack> oneItems = session.getItems(one);
-        List<ItemStack> twoItems = session.getItems(two);
+        List<ItemStack> oneItems = trade.getPlayerOneItems();
+        List<ItemStack> twoItems = trade.getPlayerTwoItems();
 
-        boolean previousAutoCommit;
-
-        try {
-            if (connection.isClosed()) {
-                throw new SQLException("Database sudah ditutup.");
-            }
-
-            previousAutoCommit = connection.getAutoCommit();
-
-            if (!previousAutoCommit) {
-                throw new SQLException(
-                        "Database sedang menjalankan transaksi lain."
-                );
-            }
-
-        } catch (SQLException exception) {
-            logFailure(one, two, exception);
+        if (!validItems(oneItems) || !validItems(twoItems)) {
+            plugin.getLogger().severe(
+                    "Recovery gagal: data item tidak valid. "
+                            + one + " <-> " + two
+            );
             return false;
         }
 
-        boolean committed = false;
-
         try {
-            connection.setAutoCommit(false);
-
-            String sql = """
-                INSERT INTO mailbox
-                (player_uuid, item_data, created_at)
-                VALUES (?, ?, ?)
-            """;
-
-            try (PreparedStatement statement =
-                         connection.prepareStatement(sql)) {
-
-                saveItems(statement, one, oneItems);
-                saveItems(statement, two, twoItems);
+            for (ItemStack item : oneItems) {
+                if (!mailboxManager.store(one, item.clone())) {
+                    throw new SQLException(
+                            "Gagal menyimpan item pemain pertama."
+                    );
+                }
             }
 
-            connection.commit();
-            committed = true;
+            for (ItemStack item : twoItems) {
+                if (!mailboxManager.store(two, item.clone())) {
+                    throw new SQLException(
+                            "Gagal menyimpan item pemain kedua."
+                    );
+                }
+            }
 
-            session.setCancelled(true);
-            tradeManager.removeSession(session);
+            if (!tradeStorage.delete(one, two)) {
+                throw new SQLException(
+                        "Gagal menghapus sesi trade dari database."
+                );
+            }
+
+            tradeManager.removeRequests(one);
+            tradeManager.removeRequests(two);
 
             plugin.getLogger().info(
                     "Trade recovery berhasil: "
@@ -131,79 +126,30 @@ public class TradeRecoveryManager {
             return true;
 
         } catch (SQLException | RuntimeException exception) {
+            plugin.getLogger().severe(
+                    "TRADE RECOVERY GAGAL! "
+                            + "PlayerOne=" + one
+                            + ", PlayerTwo=" + two
+                            + ", Error=" + exception.getMessage()
+            );
 
-            if (!committed) {
-                try {
-                    connection.rollback();
-                } catch (SQLException rollbackException) {
-                    exception.addSuppressed(rollbackException);
-                }
-            }
-
-            logFailure(one, two, exception);
             return false;
-
-        } finally {
-            try {
-                connection.setAutoCommit(previousAutoCommit);
-            } catch (SQLException exception) {
-                plugin.getLogger().severe(
-                        "Gagal mengembalikan mode transaksi database: "
-                                + exception.getMessage()
-                );
-            }
         }
     }
 
-    private void saveItems(
-            PreparedStatement statement,
-            UUID player,
-            List<ItemStack> items
-    ) throws SQLException {
-
-        if (player == null || items == null) {
-            throw new SQLException(
-                    "Data pemain atau daftar item tidak valid."
-            );
+    private boolean validItems(List<ItemStack> items) {
+        if (items == null) {
+            return false;
         }
 
         for (ItemStack item : items) {
             if (item == null
                     || item.getType().isAir()
                     || item.getAmount() <= 0) {
-                continue;
-            }
-
-            statement.setString(1, player.toString());
-
-            statement.setString(
-                    2,
-                    ItemSerializer.serialize(item.clone())
-            );
-
-            statement.setLong(
-                    3,
-                    System.currentTimeMillis()
-            );
-
-            if (statement.executeUpdate() != 1) {
-                throw new SQLException(
-                        "Gagal menyimpan item recovery untuk " + player
-                );
+                return false;
             }
         }
-    }
 
-    private void logFailure(
-            UUID one,
-            UUID two,
-            Exception exception
-    ) {
-        plugin.getLogger().severe(
-                "TRADE RECOVERY GAGAL! "
-                        + "PlayerOne=" + one
-                        + ", PlayerTwo=" + two
-                        + ", Error=" + exception.getMessage()
-        );
+        return true;
     }
 }
