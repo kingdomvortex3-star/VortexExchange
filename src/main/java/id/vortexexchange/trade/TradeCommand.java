@@ -91,11 +91,6 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        if (!plugin.getConfig().getBoolean("trade.require-same-world", true)
-                && false) {
-            return;
-        }
-
         if (plugin.getConfig().getBoolean("trade.require-same-world", true)
                 && !player.getWorld().equals(target.getWorld())) {
             player.sendMessage(color("&cPemain harus berada di world yang sama."));
@@ -110,12 +105,19 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        if (!tradeManager.sendRequest(player.getUniqueId(), target.getUniqueId())) {
-            player.sendMessage(color("&cPermintaan trade gagal dikirim."));
+        if (tradeManager.areRequestsDisabled(target.getUniqueId())) {
+            player.sendMessage(color("&cPemain tersebut menonaktifkan permintaan trade."));
             return;
         }
 
-        player.sendMessage(color("&aPermintaan trade dikirim kepada &f" + target.getName() + "&a."));
+        if (!tradeManager.sendRequest(player.getUniqueId(), target.getUniqueId())) {
+            player.sendMessage(color("&cPermintaan gagal dikirim. Coba lagi beberapa detik."));
+            return;
+        }
+
+        player.sendMessage(color("&aPermintaan trade dikirim kepada &f"
+                + target.getName() + "&a."));
+
         target.sendMessage(color("&b" + player.getName()
                 + " &eingin melakukan trade denganmu."));
         target.sendMessage(color("&7Ketik &a/trade accept &7untuk menerima."));
@@ -137,14 +139,6 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        if (request.isExpired(
-                plugin.getConfig().getInt("trade.request-expire-seconds", 60)
-        )) {
-            tradeManager.denyRequest(playerId);
-            player.sendMessage(color("&cPermintaan trade sudah kedaluwarsa."));
-            return;
-        }
-
         Player requester = Bukkit.getPlayer(request.getSender());
 
         if (requester == null || !requester.isOnline()) {
@@ -160,8 +154,10 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        player.sendMessage(color("&aTrade dimulai dengan &f" + requester.getName() + "&a."));
-        requester.sendMessage(color("&a" + player.getName() + " menerima trade kamu."));
+        player.sendMessage(color("&aTrade dimulai dengan &f"
+                + requester.getName() + "&a."));
+        requester.sendMessage(color("&a" + player.getName()
+                + " menerima trade kamu."));
 
         openTrade(player, session);
         openTrade(requester, session);
@@ -182,12 +178,23 @@ public class TradeCommand implements CommandExecutor {
         player.sendMessage(color("&cPermintaan trade ditolak."));
 
         if (requester != null && requester.isOnline()) {
-            requester.sendMessage(color("&c" + player.getName() + " menolak permintaan trade."));
+            requester.sendMessage(color("&c" + player.getName()
+                    + " menolak permintaan trade."));
         }
     }
 
     private void toggle(Player player) {
-        player.sendMessage(color("&eFitur toggle trade belum tersedia di versi ini."));
+        UUID uuid = player.getUniqueId();
+
+        boolean disabled = !tradeManager.areRequestsDisabled(uuid);
+
+        tradeManager.setRequestsDisabled(uuid, disabled);
+
+        if (disabled) {
+            player.sendMessage(color("&cPermintaan trade sekarang DINONAKTIFKAN."));
+        } else {
+            player.sendMessage(color("&aPermintaan trade sekarang DIAKTIFKAN."));
+        }
     }
 
     private void setMoney(Player player, String[] args) {
@@ -290,7 +297,7 @@ public class TradeCommand implements CommandExecutor {
         player.sendMessage(color("&7/trade <player> &8- &fKirim permintaan trade"));
         player.sendMessage(color("&7/trade accept &8- &fTerima permintaan"));
         player.sendMessage(color("&7/trade deny &8- &fTolak permintaan"));
-        player.sendMessage(color("&7/trade toggle &8- &fAtur permintaan trade"));
+        player.sendMessage(color("&7/trade toggle &8- &fAktif/nonaktif permintaan"));
         player.sendMessage(color("&7/trade money <jumlah> &8- &fTawarkan uang"));
     }
 
