@@ -3,8 +3,8 @@ package id.vortexexchange.trade;
 
 import id.vortexexchange.VortexExchange;
 import id.vortexexchange.database.MailboxManager;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,6 +16,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,6 +42,10 @@ public class TradeListener implements Listener {
         this.tradeManager = tradeManager;
         this.transactionManager = transactionManager;
         this.mailboxManager = mailboxManager;
+    }
+
+    private LanguageManager lang() {
+        return plugin.getLanguageManager();
     }
 
     @EventHandler
@@ -85,7 +90,7 @@ public class TradeListener implements Listener {
         }
 
         if (slot == 53) {
-            cancelTrade(session, "&cTrade dibatalkan.");
+            cancelTrade(session, lang().get("trade.cancelled"));
             return;
         }
 
@@ -99,11 +104,8 @@ public class TradeListener implements Listener {
             TradeSession session,
             InventoryClickEvent event
     ) {
-        if (!plugin.getConfig().getBoolean(
-                "trade.allow-items", true)) {
-            player.sendMessage(color(
-                    "&cPenawaran item sedang dinonaktifkan."
-            ));
+        if (!plugin.getConfig().getBoolean("trade.allow-items", true)) {
+            player.sendMessage(lang().get("trade.items-disabled"));
             return;
         }
 
@@ -120,41 +122,29 @@ public class TradeListener implements Listener {
         }
 
         UUID uuid = player.getUniqueId();
-
         List<ItemStack> oldItems = session.getItems(uuid);
 
         if (oldItems.size() >= OWN_SLOTS.length) {
-            player.sendMessage(color(
-                    "&cSlot penawaran sudah penuh."
-            ));
+            player.sendMessage(lang().get("trade.slots-full"));
             return;
         }
 
         if (!session.addItem(uuid, clicked.clone())) {
-            player.sendMessage(color(
-                    "&cItem gagal ditambahkan ke penawaran."
-            ));
+            player.sendMessage(lang().get("trade.item-add-failed"));
             return;
         }
 
         if (!tradeManager.saveSession(session)) {
             session.setItems(uuid, oldItems);
-
-            player.sendMessage(color(
-                    "&cGagal menyimpan penawaran ke database. "
-                            + "Item tidak jadi ditambahkan."
-            ));
-
+            player.sendMessage(lang().get("trade.item-save-failed"));
+            refresh(session);
             return;
         }
 
         event.setCurrentItem(null);
-
         refresh(session);
 
-        player.sendMessage(color(
-                "&aItem berhasil ditambahkan ke penawaran."
-        ));
+        player.sendMessage(lang().get("trade.item-added"));
     }
 
     private void removeOffer(
@@ -176,7 +166,6 @@ public class TradeListener implements Listener {
         }
 
         UUID uuid = player.getUniqueId();
-
         List<ItemStack> oldItems = session.getItems(uuid);
 
         ItemStack item = session.removeItem(uuid, index);
@@ -187,24 +176,12 @@ public class TradeListener implements Listener {
 
         if (!tradeManager.saveSession(session)) {
             session.setItems(uuid, oldItems);
-
-            player.sendMessage(color(
-                    "&cGagal menyimpan perubahan ke database."
-            ));
-
+            player.sendMessage(lang().get("trade.item-save-failed"));
             refresh(session);
             return;
         }
 
-        var leftovers = player.getInventory().addItem(item.clone());
-
-        leftovers.values().forEach(leftover ->
-                player.getWorld().dropItemNaturally(
-                        player.getLocation(),
-                        leftover
-                )
-        );
-
+        returnItems(uuid, List.of(item));
         refresh(session);
     }
 
@@ -217,23 +194,24 @@ public class TradeListener implements Listener {
         }
 
         UUID uuid = player.getUniqueId();
-
         session.toggleReady(uuid);
 
         if (session.areBothReady()) {
+            notifyPlayers(session, "trade.both-ready");
+            transactionManager.complete(session);
+        } else if (session.isReady(uuid)) {
             notifyPlayers(
                     session,
-                    "&aKedua pemain READY! Memproses transaksi..."
+                    "trade.player-ready",
+                    "player",
+                    player.getName()
             );
-
-            transactionManager.complete(session);
         } else {
             notifyPlayers(
                     session,
-                    "&e" + player.getName()
-                            + (session.isReady(uuid)
-                            ? " &asudah READY."
-                            : " &cmembatalkan READY.")
+                    "trade.player-unready",
+                    "player",
+                    player.getName()
             );
         }
 
@@ -292,8 +270,7 @@ public class TradeListener implements Listener {
             if (player == null || !player.isOnline()) {
                 if (!mailboxManager.store(uuid, item.clone())) {
                     plugin.getLogger().severe(
-                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: "
-                                    + uuid
+                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: " + uuid
                     );
                 }
                 continue;
@@ -301,12 +278,13 @@ public class TradeListener implements Listener {
 
             var leftovers = player.getInventory().addItem(item.clone());
 
-            leftovers.values().forEach(leftover ->
-                    player.getWorld().dropItemNaturally(
-                            player.getLocation(),
-                            leftover
-                    )
-            );
+            for (ItemStack leftover : leftovers.values()) {
+                if (!mailboxManager.store(uuid, leftover.clone())) {
+                    plugin.getLogger().severe(
+                            "GAGAL MENYIMPAN SISA ITEM KE MAILBOX: " + uuid
+                    );
+                }
+            }
         }
     }
 
@@ -341,6 +319,22 @@ public class TradeListener implements Listener {
 
     private void notifyPlayers(
             TradeSession session,
+            String key
+    ) {
+        String message = lang().get(key);
+        notifyPlayers(session, message);
+    }
+
+    private void notifyPlayers(
+            TradeSession session,
+            String key,
+            String... replacements
+    ) {
+        notifyPlayers(session, lang().get(key, replacements));
+    }
+
+    private void notifyPlayers(
+            TradeSession session,
             String message
     ) {
         for (UUID uuid : List.of(
@@ -350,7 +344,7 @@ public class TradeListener implements Listener {
             Player player = Bukkit.getPlayer(uuid);
 
             if (player != null && player.isOnline()) {
-                player.sendMessage(color(message));
+                player.sendMessage(message);
             }
         }
     }
@@ -384,10 +378,7 @@ public class TradeListener implements Listener {
         TradeSession session = gui.getSession();
 
         if (session != null && session.isActive()) {
-            cancelTrade(
-                    session,
-                    "&cTrade dibatalkan karena GUI ditutup."
-            );
+            cancelTrade(session, lang().get("trade.gui-closed"));
         }
     }
 
@@ -398,17 +389,10 @@ public class TradeListener implements Listener {
         TradeSession session = tradeManager.getSession(uuid);
 
         if (session != null && session.isActive()) {
-            cancelTrade(
-                    session,
-                    "&cTrade dibatalkan karena pemain disconnect."
-            );
+            cancelTrade(session, lang().get("trade.disconnected"));
         }
 
         tradeManager.removeRequests(uuid);
         tradeManager.clearPlayer(uuid);
-    }
-
-    private String color(String message) {
-        return ChatColor.translateAlternateColorCodes('&', message);
     }
 }
