@@ -121,21 +121,30 @@ public class TradeListener implements Listener {
 
         UUID uuid = player.getUniqueId();
 
-        List<ItemStack> items = session.getItems(uuid);
+        List<ItemStack> oldItems = session.getItems(uuid);
 
-        if (items.size() >= OWN_SLOTS.length) {
+        if (oldItems.size() >= OWN_SLOTS.length) {
             player.sendMessage(color(
                     "&cSlot penawaran sudah penuh."
             ));
             return;
         }
 
-        ItemStack offeredItem = clicked.clone();
-
-        if (!session.addItem(uuid, offeredItem)) {
+        if (!session.addItem(uuid, clicked.clone())) {
             player.sendMessage(color(
                     "&cItem gagal ditambahkan ke penawaran."
             ));
+            return;
+        }
+
+        if (!tradeManager.saveSession(session)) {
+            session.setItems(uuid, oldItems);
+
+            player.sendMessage(color(
+                    "&cGagal menyimpan penawaran ke database. "
+                            + "Item tidak jadi ditambahkan."
+            ));
+
             return;
         }
 
@@ -168,9 +177,22 @@ public class TradeListener implements Listener {
 
         UUID uuid = player.getUniqueId();
 
+        List<ItemStack> oldItems = session.getItems(uuid);
+
         ItemStack item = session.removeItem(uuid, index);
 
         if (item == null) {
+            return;
+        }
+
+        if (!tradeManager.saveSession(session)) {
+            session.setItems(uuid, oldItems);
+
+            player.sendMessage(color(
+                    "&cGagal menyimpan perubahan ke database."
+            ));
+
+            refresh(session);
             return;
         }
 
@@ -240,6 +262,15 @@ public class TradeListener implements Listener {
                 session.getPlayerTwo(),
                 session.getItems(session.getPlayerTwo())
         );
+
+        if (!tradeManager.deleteStoredSession(session)) {
+            plugin.getLogger().severe(
+                    "GAGAL MENGHAPUS DATA TRADE DARI DATABASE: "
+                            + session.getPlayerOne()
+                            + " <-> "
+                            + session.getPlayerTwo()
+            );
+        }
 
         notifyPlayers(session, message);
 
