@@ -15,6 +15,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.sql.SQLException;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuctionListener implements Listener {
@@ -51,7 +52,7 @@ public class AuctionListener implements Listener {
 
         if (event.getClickedInventory() == null
                 || !event.getClickedInventory().equals(
-                event.getView().getTopInventory())) {
+                        event.getView().getTopInventory())) {
             return;
         }
 
@@ -65,6 +66,12 @@ public class AuctionListener implements Listener {
         Integer listingId = gui.getListingId(slot);
 
         if (listingId == null) {
+            return;
+        }
+
+        if (event.getClick().isShiftClick()
+                || event.getClick().isKeyboardClick()
+                || event.getClick().isCreativeAction()) {
             return;
         }
 
@@ -86,26 +93,57 @@ public class AuctionListener implements Listener {
         }
 
         try {
-            if (!plugin.getConfig().getBoolean("auction.enabled", true)) {
-                buyer.sendMessage(color("&cAuction House sedang dinonaktifkan."));
+            if (!plugin.getConfig().getBoolean(
+                    "auction.enabled", true)) {
+                buyer.sendMessage(color(
+                        "&cAuction House sedang dinonaktifkan."
+                ));
                 return;
             }
 
             if (!economyManager.isAvailable()) {
-                buyer.sendMessage(color("&cEkonomi Vault tidak tersedia."));
+                buyer.sendMessage(color(
+                        "&cEkonomi Vault tidak tersedia."
+                ));
                 return;
             }
 
-            AuctionListing listing = auctionManager.getListing(listingId);
+            AuctionListing listing =
+                    auctionManager.getListing(listingId);
 
             if (listing == null || listing.isExpired()) {
-                buyer.sendMessage(color("&cListing sudah tidak tersedia."));
+                buyer.sendMessage(color(
+                        "&cListing sudah tidak tersedia."
+                ));
                 buyer.closeInventory();
                 return;
             }
 
-            if (listing.getSellerUUID().equals(buyer.getUniqueId())) {
-                buyer.sendMessage(color("&cKamu tidak bisa membeli barang sendiri."));
+            UUID sellerUUID = listing.getSellerUUID();
+
+            if (sellerUUID == null) {
+                buyer.sendMessage(color("&cData penjual tidak valid."));
+                return;
+            }
+
+            if (sellerUUID.equals(buyer.getUniqueId())) {
+                buyer.sendMessage(color(
+                        "&cKamu tidak bisa membeli barang sendiri."
+                ));
+                return;
+            }
+
+            ItemStack item = listing.getItem();
+
+            if (item == null || item.getType().isAir()
+                    || item.getAmount() <= 0) {
+                buyer.sendMessage(color(
+                        "&cData barang tidak valid. Hubungi admin."
+                ));
+
+                plugin.getLogger().severe(
+                        "Item listing tidak valid. ID: " + listingId
+                );
                 return;
             }
 
@@ -121,9 +159,8 @@ public class AuctionListener implements Listener {
                 return;
             }
 
-            OfflinePlayer seller = Bukkit.getOfflinePlayer(
-                    listing.getSellerUUID()
-            );
+            OfflinePlayer seller =
+                    Bukkit.getOfflinePlayer(sellerUUID);
 
             if (!economyManager.withdraw(buyer, price)) {
                 buyer.sendMessage(color("&cPembayaran gagal."));
@@ -135,51 +172,31 @@ public class AuctionListener implements Listener {
             try {
                 deleted = auctionManager.deleteListing(listingId);
             } catch (SQLException exception) {
-                boolean refunded = economyManager.deposit(buyer, price);
-
-                if (!refunded) {
-                    logRecovery(
-                            listingId,
-                            buyer.getUniqueId(),
-                            price,
-                            "Database error dan refund gagal"
-                    );
-                }
+                refundBuyer(buyer, listingId, price,
+                        "Gagal menghapus listing: "
+                                + exception.getMessage());
 
                 buyer.sendMessage(color(
-                        "&cTransaksi gagal. Hubungi admin jika saldo berubah."
+                        "&cTransaksi gagal. Periksa saldo kamu."
                 ));
-
-                plugin.getLogger().severe(
-                        "Gagal menghapus listing " + listingId
-                                + ": " + exception.getMessage()
-                );
-
                 return;
             }
 
             if (!deleted) {
-                boolean refunded = economyManager.deposit(buyer, price);
-
-                if (!refunded) {
-                    logRecovery(
-                            listingId,
-                            buyer.getUniqueId(),
-                            price,
-                            "Listing gagal dihapus dan refund gagal"
-                    );
-                }
+                refundBuyer(
+                        buyer,
+                        listingId,
+                        price,
+                        "Listing tidak berhasil dihapus."
+                );
 
                 buyer.sendMessage(color(
-                        "&cListing sudah tidak tersedia. Saldo sedang diperiksa."
+                        "&cListing sudah tidak tersedia."
                 ));
-
                 return;
             }
 
-            boolean deposited = economyManager.deposit(seller, price);
-
-            if (!deposited) {
+            if (!economyManager.deposit(seller, price)) {
                 boolean restored = restoreListing(listing);
 
                 boolean refunded = economyManager.deposit(buyer, price);
@@ -189,54 +206,53 @@ public class AuctionListener implements Listener {
                         buyer.getUniqueId(),
                         price,
                         "Pembayaran seller gagal. Listing restored="
-                                + restored + ", buyer refunded=" + refunded
+                                + restored
+                                + ", buyer refunded=" + refunded
                 );
 
                 buyer.sendMessage(color(
-                        "&cPembayaran gagal. Hubungi admin jika saldo berubah."
+                        "&cTransaksi bermasalah. Hubungi admin."
                 ));
-
                 return;
             }
 
-            ItemStack item = listing.getItem();
+            try {
+                ItemStack purchasedItem = item.clone();
 
-            if (item == null || item.getType().isAir()) {
-                plugin.getLogger().severe(
-                        "Listing " + listingId + " memiliki item tidak valid."
+                var leftovers = buyer.getInventory().addItem(
+                        purchasedItem
                 );
 
+                leftovers.values().forEach(leftover ->
+                        buyer.getWorld().dropItemNaturally(
+                                buyer.getLocation(),
+                                leftover
+                        )
+                );
+
+            } catch (RuntimeException exception) {
                 logRecovery(
                         listingId,
                         buyer.getUniqueId(),
                         price,
-                        "Item listing tidak valid setelah pembayaran"
+                        "Pembayaran berhasil tetapi pengiriman item gagal: "
+                                + exception.getMessage()
                 );
 
                 buyer.sendMessage(color(
-                        "&cTerjadi kesalahan item. Hubungi admin."
+                        "&cPembayaran berhasil, tetapi pengiriman barang "
+                                + "bermasalah. Hubungi admin."
                 ));
 
                 return;
             }
-
-            var leftovers = buyer.getInventory().addItem(item.clone());
-
-            leftovers.values().forEach(leftover ->
-                    buyer.getWorld().dropItemNaturally(
-                            buyer.getLocation(),
-                            leftover
-                    )
-            );
 
             buyer.sendMessage(color(
                     "&aBerhasil membeli barang seharga &e"
                             + economyManager.format(price)
             ));
 
-            Player onlineSeller = Bukkit.getPlayer(
-                    listing.getSellerUUID()
-            );
+            Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
             if (onlineSeller != null && onlineSeller.isOnline()) {
                 onlineSeller.sendMessage(color(
@@ -252,7 +268,9 @@ public class AuctionListener implements Listener {
             buyer.closeInventory();
 
         } catch (SQLException exception) {
-            buyer.sendMessage(color("&cTerjadi kesalahan database."));
+            buyer.sendMessage(color(
+                    "&cTerjadi kesalahan database."
+            ));
 
             plugin.getLogger().severe(
                     "Auction purchase error: " + exception.getMessage()
@@ -269,6 +287,24 @@ public class AuctionListener implements Listener {
 
         } finally {
             processing.remove(listingId);
+        }
+    }
+
+    private void refundBuyer(
+            Player buyer,
+            int listingId,
+            double amount,
+            String reason
+    ) {
+        boolean refunded = economyManager.deposit(buyer, amount);
+
+        if (!refunded) {
+            logRecovery(
+                    listingId,
+                    buyer.getUniqueId(),
+                    amount,
+                    reason + " Refund gagal."
+            );
         }
     }
 
@@ -303,7 +339,7 @@ public class AuctionListener implements Listener {
 
     private void logRecovery(
             int listingId,
-            java.util.UUID buyer,
+            UUID buyer,
             double amount,
             String reason
     ) {
