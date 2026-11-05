@@ -20,6 +20,7 @@ public class LanguageManager {
 
     private void loadLanguages() {
 
+        // INDONESIAN
         indonesia.put("permission.denied", "&cKamu tidak memiliki izin.");
         indonesia.put("player.only", "&cPerintah ini hanya untuk pemain.");
         indonesia.put("player.not-found", "&cPemain tidak ditemukan.");
@@ -96,7 +97,9 @@ public class LanguageManager {
         indonesia.put("mailbox.remaining", "&eKamu masih memiliki &b{count} &ebarang di Mailbox!");
         indonesia.put("mailbox.empty-inventory", "&7Kosongkan inventory untuk menerima semua barang.");
         indonesia.put("mailbox.error", "&cMailbox gagal diperiksa. Hubungi admin.");
+        indonesia.put("mailbox.delivered", "&aMailbox: &f{count} &aitem berhasil diterima.");
 
+        // ENGLISH
         english.put("permission.denied", "&cYou do not have permission.");
         english.put("player.only", "&cThis command can only be used by players.");
         english.put("player.not-found", "&cPlayer not found.");
@@ -173,6 +176,7 @@ public class LanguageManager {
         english.put("mailbox.remaining", "&eYou still have &b{count} &eitems in your Mailbox!");
         english.put("mailbox.empty-inventory", "&7Clear your inventory to receive all items.");
         english.put("mailbox.error", "&cMailbox could not be checked. Contact an administrator.");
+        english.put("mailbox.delivered", "&aMailbox: &f{count} &aitems delivered successfully.");
     }
 
     public String get(String key) {
