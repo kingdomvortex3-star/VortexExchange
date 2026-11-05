@@ -2,6 +2,7 @@
 package id.vortexexchange;
 
 import id.vortexexchange.auction.AuctionCommand;
+import id.vortexexchange.auction.AuctionExpiryManager;
 import id.vortexexchange.auction.AuctionListener;
 import id.vortexexchange.auction.AuctionManager;
 import id.vortexexchange.database.DatabaseManager;
@@ -14,6 +15,7 @@ import id.vortexexchange.trade.TradeManager;
 import id.vortexexchange.trade.TradeTransactionManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.sql.SQLException;
 
@@ -25,7 +27,10 @@ public final class VortexExchange extends JavaPlugin {
     private MailboxManager mailboxManager;
     private EconomyManager economyManager;
     private AuctionManager auctionManager;
+    private AuctionExpiryManager expiryManager;
     private TradeManager tradeManager;
+
+    private BukkitTask expiryTask;
 
     @Override
     public void onEnable() {
@@ -59,25 +64,30 @@ public final class VortexExchange extends JavaPlugin {
                     "Vault atau plugin ekonomi tidak ditemukan!"
             );
 
+            databaseManager.close();
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
         auctionManager = new AuctionManager(databaseManager);
+        expiryManager = new AuctionExpiryManager(this, auctionManager);
         tradeManager = new TradeManager();
 
         if (!registerCommands()) {
+            databaseManager.close();
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
         registerListeners();
+        startExpiryTask();
 
         getLogger().info("--------------------------------");
         getLogger().info("VortexExchange berhasil diaktifkan!");
         getLogger().info("Auction House: ENABLED");
         getLogger().info("Player Trading: ENABLED");
         getLogger().info("Mailbox: ENABLED");
+        getLogger().info("Auction Expiry: ENABLED");
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
@@ -138,8 +148,39 @@ public final class VortexExchange extends JavaPlugin {
         );
     }
 
+    private void startExpiryTask() {
+        expiryTask = getServer().getScheduler().runTaskTimer(
+                this,
+                () -> {
+                    try {
+                        int count = expiryManager.processExpired();
+
+                        if (count > 0) {
+                            getLogger().info(
+                                    "Berhasil memproses "
+                                            + count
+                                            + " listing kedaluwarsa."
+                            );
+                        }
+
+                    } catch (SQLException exception) {
+                        getLogger().severe(
+                                "Auction expiry error: "
+                                        + exception.getMessage()
+                        );
+                    }
+                },
+                100L,
+                6000L
+        );
+    }
+
     @Override
     public void onDisable() {
+        if (expiryTask != null) {
+            expiryTask.cancel();
+        }
+
         if (databaseManager != null) {
             databaseManager.close();
         }
