@@ -30,7 +30,6 @@ public final class VortexExchange extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-
         saveDefaultConfig();
 
         getLogger().info("Starting VortexExchange...");
@@ -127,7 +126,8 @@ public final class VortexExchange extends JavaPlugin {
                 new TradeListener(
                         this,
                         tradeManager,
-                        transactionManager
+                        transactionManager,
+                        mailboxManager
                 ),
                 this
         );
