@@ -22,7 +22,9 @@ repositories {
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:26.3.build.+'
 
-    compileOnly 'com.github.MilkBowl:VaultAPI:1.7'
+    compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
+        transitive = false
+    }
 
     implementation 'org.xerial:sqlite-jdbc:3.50.3.0'
 }
@@ -49,8 +51,12 @@ processResources {
 shadowJar {
     archiveClassifier = ''
 
-    relocate 'org.sqlite',
-             'id.vortexexchange.lib.sqlite'
+    relocate(
+        'org.sqlite',
+        'id.vortexexchange.lib.sqlite'
+    )
 }
 
-build.dependsOn shadowJar
+build {
+    dependsOn shadowJar
+}
