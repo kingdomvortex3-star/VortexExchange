@@ -1,7 +1,9 @@
 
 package id.vortexexchange.database;
 
+import id.vortexexchange.VortexExchange;
 import id.vortexexchange.util.ItemSerializer;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -20,6 +22,10 @@ public class MailboxManager {
 
     public MailboxManager(DatabaseManager database) {
         this.database = database;
+    }
+
+    private LanguageManager lang() {
+        return VortexExchange.getInstance().getLanguageManager();
     }
 
     public synchronized void initialize() throws SQLException {
@@ -46,10 +52,7 @@ public class MailboxManager {
         }
     }
 
-    public synchronized boolean store(
-            UUID player,
-            ItemStack item
-    ) {
+    public synchronized boolean store(UUID player, ItemStack item) {
         if (player == null || !isValidItem(item)) {
             return false;
         }
@@ -111,7 +114,6 @@ public class MailboxManager {
                                     item
                             ));
                         }
-
                     } catch (RuntimeException exception) {
                         // Data rusak tetap disimpan untuk pemeriksaan admin.
                     }
@@ -203,7 +205,6 @@ public class MailboxManager {
                     player.getInventory().setStorageContents(
                             inventoryBefore
                     );
-
                     break;
                 }
 
@@ -211,21 +212,26 @@ public class MailboxManager {
             }
 
             if (delivered > 0 && player.isOnline()) {
-                player.sendMessage(
-                        "§aMailbox: §f" + delivered
-                                + " §aitem berhasil diterima."
-                );
+                player.sendMessage(lang().get(
+                        "mailbox.delivered",
+                        "count", String.valueOf(delivered)
+                ));
             }
 
         } catch (SQLException | RuntimeException exception) {
-            player.sendMessage(
-                    "§cGagal mengambil barang dari Mailbox. "
-                            + "Silakan hubungi admin."
+            VortexExchange.getInstance().getLogger().severe(
+                    "Gagal mengirim Mailbox untuk "
+                            + player.getUniqueId()
+                            + ": " + exception.getMessage()
             );
+
+            if (player.isOnline()) {
+                player.sendMessage(lang().get("mailbox.error"));
+            }
         }
     }
 
-    private boolean saveLeftovers(
+    private synchronized boolean saveLeftovers(
             int id,
             Map<Integer, ItemStack> leftovers
     ) throws SQLException {
@@ -243,22 +249,47 @@ public class MailboxManager {
             }
         }
 
-        ItemStack first = remainingItems.get(0);
+        Connection connection = database.getConnection();
+        boolean previousAutoCommit = connection.getAutoCommit();
 
-        if (!updateItem(id, first)) {
-            return false;
-        }
+        try {
+            connection.setAutoCommit(false);
 
-        for (int i = 1; i < remainingItems.size(); i++) {
-            if (!store(
-                    getOwnerUUID(id),
-                    remainingItems.get(i)
-            )) {
+            UUID owner = getOwnerUUID(id);
+
+            if (owner == null) {
+                connection.rollback();
                 return false;
             }
-        }
 
-        return true;
+            ItemStack first = remainingItems.get(0);
+
+            if (!updateItem(id, first)) {
+                connection.rollback();
+                return false;
+            }
+
+            for (int i = 1; i < remainingItems.size(); i++) {
+                if (!insertItem(
+                        connection,
+                        owner,
+                        remainingItems.get(i)
+                )) {
+                    connection.rollback();
+                    return false;
+                }
+            }
+
+            connection.commit();
+            return true;
+
+        } catch (SQLException | RuntimeException exception) {
+            connection.rollback();
+            throw exception;
+
+        } finally {
+            connection.setAutoCommit(previousAutoCommit);
+        }
     }
 
     private UUID getOwnerUUID(int id) throws SQLException {
@@ -275,9 +306,7 @@ public class MailboxManager {
 
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
-                    throw new SQLException(
-                            "Data Mailbox tidak ditemukan: " + id
-                    );
+                    return null;
                 }
 
                 try {
@@ -294,10 +323,38 @@ public class MailboxManager {
         }
     }
 
-    private synchronized boolean updateItem(
-            int id,
+    private boolean insertItem(
+            Connection connection,
+            UUID owner,
             ItemStack item
     ) throws SQLException {
+
+        if (owner == null || !isValidItem(item)) {
+            return false;
+        }
+
+        String sql = """
+            INSERT INTO mailbox
+            (player_uuid, item_data, created_at)
+            VALUES (?, ?, ?)
+        """;
+
+        try (PreparedStatement statement =
+                     connection.prepareStatement(sql)) {
+
+            statement.setString(1, owner.toString());
+            statement.setString(
+                    2,
+                    ItemSerializer.serialize(item.clone())
+            );
+            statement.setLong(3, System.currentTimeMillis());
+
+            return statement.executeUpdate() == 1;
+        }
+    }
+
+    private boolean updateItem(int id, ItemStack item)
+            throws SQLException {
 
         if (!isValidItem(item)) {
             return false;
@@ -316,7 +373,6 @@ public class MailboxManager {
                     1,
                     ItemSerializer.serialize(item.clone())
             );
-
             statement.setInt(2, id);
 
             return statement.executeUpdate() == 1;
