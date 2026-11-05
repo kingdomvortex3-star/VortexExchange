@@ -8,6 +8,7 @@ import id.vortexexchange.auction.AuctionManager;
 import id.vortexexchange.database.DatabaseManager;
 import id.vortexexchange.database.MailboxManager;
 import id.vortexexchange.database.MailboxListener;
+import id.vortexexchange.database.TradeStorage;
 import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.trade.TradeCommand;
 import id.vortexexchange.trade.TradeListener;
@@ -26,6 +27,7 @@ public final class VortexExchange extends JavaPlugin {
 
     private DatabaseManager databaseManager;
     private MailboxManager mailboxManager;
+    private TradeStorage tradeStorage;
     private EconomyManager economyManager;
     private AuctionManager auctionManager;
     private AuctionExpiryManager expiryManager;
@@ -49,12 +51,15 @@ public final class VortexExchange extends JavaPlugin {
             mailboxManager = new MailboxManager(databaseManager);
             mailboxManager.initialize();
 
+            tradeStorage = new TradeStorage(databaseManager);
+
         } catch (SQLException exception) {
             getLogger().severe(
                     "Database gagal diinisialisasi: "
                             + exception.getMessage()
             );
 
+            databaseManager.close();
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -73,7 +78,7 @@ public final class VortexExchange extends JavaPlugin {
 
         auctionManager = new AuctionManager(databaseManager);
         expiryManager = new AuctionExpiryManager(this, auctionManager);
-        tradeManager = new TradeManager();
+        tradeManager = new TradeManager(tradeStorage);
 
         recoveryManager = new TradeRecoveryManager(
                 this,
@@ -95,7 +100,7 @@ public final class VortexExchange extends JavaPlugin {
         getLogger().info("Player Trading: ENABLED");
         getLogger().info("Mailbox: ENABLED");
         getLogger().info("Auction Expiry: ENABLED");
-        getLogger().info("Trade Recovery: ENABLED");
+        getLogger().info("Trade Storage: ENABLED");
         getLogger().info("Economy: Vault");
         getLogger().info("Database: SQLite");
         getLogger().info("--------------------------------");
@@ -215,6 +220,10 @@ public final class VortexExchange extends JavaPlugin {
 
     public MailboxManager getMailboxManager() {
         return mailboxManager;
+    }
+
+    public TradeStorage getTradeStorage() {
+        return tradeStorage;
     }
 
     public EconomyManager getEconomyManager() {
