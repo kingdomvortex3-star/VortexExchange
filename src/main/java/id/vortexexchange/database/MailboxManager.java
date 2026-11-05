@@ -2,11 +2,9 @@
 package id.vortexexchange.database;
 
 import id.vortexexchange.util.ItemSerializer;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -22,7 +20,7 @@ public class MailboxManager {
         this.database = database;
     }
 
-    public void initialize() throws SQLException {
+    public synchronized void initialize() throws SQLException {
         String sql = """
             CREATE TABLE IF NOT EXISTS mailbox (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,9 +34,17 @@ public class MailboxManager {
                      database.getConnection().prepareStatement(sql)) {
             statement.execute();
         }
+
+        try (PreparedStatement statement =
+                     database.getConnection().prepareStatement("""
+                         CREATE INDEX IF NOT EXISTS idx_mailbox_player
+                         ON mailbox(player_uuid)
+                     """)) {
+            statement.execute();
+        }
     }
 
-    public boolean store(UUID player, ItemStack item) {
+    public synchronized boolean store(UUID player, ItemStack item) {
         if (player == null || item == null || item.getType().isAir()) {
             return false;
         }
@@ -53,17 +59,23 @@ public class MailboxManager {
                      database.getConnection().prepareStatement(sql)) {
 
             statement.setString(1, player.toString());
-            statement.setString(2, ItemSerializer.serialize(item));
+            statement.setString(2, ItemSerializer.serialize(item.clone()));
             statement.setLong(3, System.currentTimeMillis());
 
-            return statement.executeUpdate() > 0;
+            return statement.executeUpdate() == 1;
 
         } catch (SQLException | IllegalArgumentException exception) {
             return false;
         }
     }
 
-    public List<MailboxItem> getItems(UUID player) throws SQLException {
+    public synchronized List<MailboxItem> getItems(UUID player)
+            throws SQLException {
+
+        if (player == null) {
+            return new ArrayList<>();
+        }
+
         List<MailboxItem> items = new ArrayList<>();
 
         String sql = """
@@ -80,12 +92,20 @@ public class MailboxManager {
 
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
-                    items.add(new MailboxItem(
-                            result.getInt("id"),
-                            ItemSerializer.deserialize(
-                                    result.getString("item_data")
-                            )
-                    ));
+                    try {
+                        ItemStack item = ItemSerializer.deserialize(
+                                result.getString("item_data")
+                        );
+
+                        if (item != null && !item.getType().isAir()) {
+                            items.add(new MailboxItem(
+                                    result.getInt("id"),
+                                    item
+                            ));
+                        }
+                    } catch (IllegalArgumentException exception) {
+                        // Data rusak tetap disimpan agar bisa diperiksa admin.
+                    }
                 }
             }
         }
@@ -93,18 +113,22 @@ public class MailboxManager {
         return items;
     }
 
-    public boolean deleteItem(int id) throws SQLException {
+    public synchronized boolean deleteItem(int id) throws SQLException {
         String sql = "DELETE FROM mailbox WHERE id = ?";
 
         try (PreparedStatement statement =
                      database.getConnection().prepareStatement(sql)) {
 
             statement.setInt(1, id);
-            return statement.executeUpdate() > 0;
+            return statement.executeUpdate() == 1;
         }
     }
 
-    public int getItemCount(UUID player) throws SQLException {
+    public synchronized int getItemCount(UUID player) throws SQLException {
+        if (player == null) {
+            return 0;
+        }
+
         String sql = """
             SELECT COUNT(*)
             FROM mailbox
@@ -122,37 +146,70 @@ public class MailboxManager {
         }
     }
 
-    public void deliver(Player player) {
+    public synchronized void deliver(Player player) {
         if (player == null || !player.isOnline()) {
             return;
         }
 
+        UUID uuid = player.getUniqueId();
+
         try {
-            List<MailboxItem> items = getItems(player.getUniqueId());
+            List<MailboxItem> items = getItems(uuid);
+
+            int delivered = 0;
 
             for (MailboxItem mailboxItem : items) {
+                if (!player.isOnline()) {
+                    break;
+                }
+
                 ItemStack item = mailboxItem.item();
 
-                var leftovers = player.getInventory().addItem(item);
+                if (item == null || item.getType().isAir()) {
+                    continue;
+                }
+
+                var leftovers = player.getInventory().addItem(item.clone());
 
                 if (leftovers.isEmpty()) {
-                    deleteItem(mailboxItem.id());
-                } else {
-                    ItemStack remaining = leftovers.values()
-                            .iterator().next();
-
-                    if (remaining != null) {
-                        updateItem(mailboxItem.id(), remaining);
+                    if (deleteItem(mailboxItem.id())) {
+                        delivered++;
                     }
+                    continue;
+                }
+
+                ItemStack remaining = leftovers.values()
+                        .iterator()
+                        .next();
+
+                if (remaining != null
+                        && !remaining.getType().isAir()) {
+                    updateItem(mailboxItem.id(), remaining);
                 }
             }
 
+            if (delivered > 0 && player.isOnline()) {
+                player.sendMessage(
+                        "§aMailbox: §f" + delivered
+                                + " §aitem berhasil diterima."
+                );
+            }
+
         } catch (SQLException exception) {
-            player.sendMessage("§cGagal mengambil barang dari mailbox.");
+            player.sendMessage(
+                    "§cGagal mengambil barang dari mailbox. "
+                            + "Silakan hubungi admin."
+            );
         }
     }
 
-    private void updateItem(int id, ItemStack item) throws SQLException {
+    private synchronized boolean updateItem(int id, ItemStack item)
+            throws SQLException {
+
+        if (item == null || item.getType().isAir()) {
+            return deleteItem(id);
+        }
+
         String sql = """
             UPDATE mailbox
             SET item_data = ?
@@ -162,9 +219,14 @@ public class MailboxManager {
         try (PreparedStatement statement =
                      database.getConnection().prepareStatement(sql)) {
 
-            statement.setString(1, ItemSerializer.serialize(item));
+            statement.setString(
+                    1,
+                    ItemSerializer.serialize(item.clone())
+            );
+
             statement.setInt(2, id);
-            statement.executeUpdate();
+
+            return statement.executeUpdate() == 1;
         }
     }
 
