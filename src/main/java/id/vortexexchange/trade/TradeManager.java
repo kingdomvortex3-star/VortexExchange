@@ -23,7 +23,7 @@ public class TradeManager {
             return false;
         }
 
-        if (Boolean.TRUE.equals(disabledRequests.get(target))) {
+        if (areRequestsDisabled(target)) {
             return false;
         }
 
@@ -45,6 +45,10 @@ public class TradeManager {
     }
 
     public TradeRequest getRequest(UUID target) {
+        return getRequest(target, 60);
+    }
+
+    public TradeRequest getRequest(UUID target, int expireSeconds) {
         if (target == null) {
             return null;
         }
@@ -55,7 +59,7 @@ public class TradeManager {
             return null;
         }
 
-        if (request.isExpired(60)) {
+        if (request.isExpired(expireSeconds)) {
             requests.remove(target, request);
             return null;
         }
@@ -64,7 +68,11 @@ public class TradeManager {
     }
 
     public synchronized TradeSession acceptRequest(UUID target) {
-        TradeRequest request = getRequest(target);
+        return acceptRequest(target, 60);
+    }
+
+    public synchronized TradeSession acceptRequest(UUID target, int expireSeconds) {
+        TradeRequest request = getRequest(target, expireSeconds);
 
         if (request == null) {
             return null;
@@ -73,11 +81,11 @@ public class TradeManager {
         UUID sender = request.getSender();
 
         if (isInTrade(sender) || isInTrade(target)) {
-            requests.remove(target);
+            requests.remove(target, request);
             return null;
         }
 
-        requests.remove(target);
+        requests.remove(target, request);
 
         TradeSession session = new TradeSession(sender, target);
 
@@ -88,11 +96,9 @@ public class TradeManager {
     }
 
     public void denyRequest(UUID target) {
-        if (target == null) {
-            return;
+        if (target != null) {
+            requests.remove(target);
         }
-
-        requests.remove(target);
     }
 
     public void removeRequests(UUID playerId) {
@@ -123,6 +129,10 @@ public class TradeManager {
     }
 
     public boolean isInTrade(UUID playerId) {
+        if (playerId == null) {
+            return false;
+        }
+
         TradeSession session = sessions.get(playerId);
         return session != null && session.isActive();
     }
@@ -172,7 +182,8 @@ public class TradeManager {
     }
 
     public boolean areRequestsDisabled(UUID playerId) {
-        return Boolean.TRUE.equals(disabledRequests.get(playerId));
+        return playerId != null
+                && Boolean.TRUE.equals(disabledRequests.get(playerId));
     }
 
     public void clearPlayer(UUID playerId) {
