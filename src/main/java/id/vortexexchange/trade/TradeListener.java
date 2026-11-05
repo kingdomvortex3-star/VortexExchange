@@ -2,6 +2,7 @@
 package id.vortexexchange.trade;
 
 import id.vortexexchange.VortexExchange;
+import id.vortexexchange.database.MailboxManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -10,6 +11,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
@@ -21,6 +23,7 @@ public class TradeListener implements Listener {
     private final VortexExchange plugin;
     private final TradeManager tradeManager;
     private final TradeTransactionManager transactionManager;
+    private final MailboxManager mailboxManager;
 
     private static final int[] OWN_SLOTS = {
             10, 11, 12, 13, 14, 15, 16,
@@ -30,11 +33,13 @@ public class TradeListener implements Listener {
     public TradeListener(
             VortexExchange plugin,
             TradeManager tradeManager,
-            TradeTransactionManager transactionManager
+            TradeTransactionManager transactionManager,
+            MailboxManager mailboxManager
     ) {
         this.plugin = plugin;
         this.tradeManager = tradeManager;
         this.transactionManager = transactionManager;
+        this.mailboxManager = mailboxManager;
     }
 
     @EventHandler
@@ -161,11 +166,7 @@ public class TradeListener implements Listener {
         session.setReady(uuid, !session.isReady(uuid));
 
         if (session.bothReady()) {
-            notifyPlayers(
-                    session,
-                    "&aKedua pemain READY! Memproses transaksi..."
-            );
-
+            notifyPlayers(session, "&aKedua pemain READY! Memproses transaksi...");
             transactionManager.complete(session);
         } else {
             notifyPlayers(
@@ -208,14 +209,21 @@ public class TradeListener implements Listener {
     private void returnItems(UUID uuid, List<ItemStack> items) {
         Player player = Bukkit.getPlayer(uuid);
 
-        if (player == null || !player.isOnline()) {
-            plugin.getLogger().severe(
-                    "Gagal mengembalikan item trade kepada " + uuid
-            );
-            return;
-        }
-
         for (ItemStack item : items) {
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+
+            if (player == null || !player.isOnline()) {
+                if (!mailboxManager.store(uuid, item)) {
+                    plugin.getLogger().severe(
+                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: "
+                                    + uuid
+                    );
+                }
+                continue;
+            }
+
             var leftovers = player.getInventory().addItem(item.clone());
 
             leftovers.values().forEach(leftover ->
@@ -246,7 +254,6 @@ public class TradeListener implements Listener {
         }
 
         TradeGUI updated = new TradeGUI(uuid, session);
-
         current.setContents(updated.getInventory().getContents());
     }
 
@@ -283,10 +290,6 @@ public class TradeListener implements Listener {
 
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) {
-            return;
-        }
-
         if (!(event.getInventory().getHolder() instanceof TradeGUI gui)) {
             return;
         }
@@ -294,11 +297,21 @@ public class TradeListener implements Listener {
         TradeSession session = gui.getSession();
 
         if (session.isActive()) {
-            cancelTrade(
-                    session,
-                    "&cTrade dibatalkan karena GUI ditutup."
-            );
+            cancelTrade(session, "&cTrade dibatalkan karena GUI ditutup.");
         }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        TradeSession session = tradeManager.getSession(
+                event.getPlayer().getUniqueId()
+        );
+
+        if (session != null && session.isActive()) {
+            cancelTrade(session, "&cTrade dibatalkan karena pemain disconnect.");
+        }
+
+        tradeManager.removeRequests(event.getPlayer().getUniqueId());
     }
 
     private String color(String message) {
