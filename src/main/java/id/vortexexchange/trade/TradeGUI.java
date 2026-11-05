@@ -57,6 +57,21 @@ public class TradeGUI implements InventoryHolder {
                 inventory.setItem(slot, glass);
             }
         }
+
+        inventory.setItem(17, createItem(
+                Material.CYAN_STAINED_GLASS_PANE,
+                "&b&lVORTEX"
+        ));
+
+        inventory.setItem(26, createItem(
+                Material.LIGHT_BLUE_STAINED_GLASS_PANE,
+                "&b&lEXCHANGE"
+        ));
+
+        inventory.setItem(35, createItem(
+                Material.LIGHT_BLUE_STAINED_GLASS_PANE,
+                "&b&lTRADE"
+        ));
     }
 
     private void displayOffers() {
@@ -71,12 +86,23 @@ public class TradeGUI implements InventoryHolder {
 
         inventory.setItem(4, createItem(
                 Material.EMERALD,
-                "&aUang kamu: &f" + session.getMoney(viewer)
+                "&a&lPENAWARAN UANG KAMU",
+                "&7Jumlah: &f" + session.getMoney(viewer),
+                "&7Status: " + readyStatus(viewer)
         ));
 
         inventory.setItem(49, createItem(
                 Material.GOLD_INGOT,
-                "&6Uang lawan: &f" + session.getMoney(opponent)
+                "&6&lPENAWARAN UANG LAWAN",
+                "&7Jumlah: &f" + session.getMoney(opponent),
+                "&7Status: " + readyStatus(opponent)
+        ));
+
+        inventory.setItem(8, createItem(
+                Material.PLAYER_HEAD,
+                "&b&lSTATUS TRADE",
+                "&7Kamu: " + readyStatus(viewer),
+                "&7Lawan: " + readyStatus(opponent)
         ));
     }
 
@@ -91,6 +117,7 @@ public class TradeGUI implements InventoryHolder {
                         : new ArrayList<>();
 
                 lore.add(ChatColor.GRAY + "Penawaran Trade");
+                meta.setLore(lore);
                 item.setItemMeta(meta);
             }
 
@@ -102,7 +129,8 @@ public class TradeGUI implements InventoryHolder {
         inventory.setItem(45, createItem(
                 Material.LIME_DYE,
                 "&a&lREADY",
-                "&7Klik untuk menyatakan siap."
+                "&7Klik untuk menyatakan siap.",
+                "&7Status: " + readyStatus(viewer)
         ));
 
         inventory.setItem(53, createItem(
@@ -113,13 +141,35 @@ public class TradeGUI implements InventoryHolder {
 
         inventory.setItem(46, createItem(
                 Material.PAPER,
-                "&ePenawaran Kamu"
+                "&e&lITEM KAMU",
+                "&7Letakkan item dari inventory",
+                "&7ke area penawaran di atas."
         ));
 
         inventory.setItem(52, createItem(
                 Material.PAPER,
-                "&bPenawaran Lawan"
+                "&b&lITEM LAWAN",
+                "&7Item yang ditawarkan pemain lain."
         ));
+
+        inventory.setItem(48, createItem(
+                Material.LIME_STAINED_GLASS_PANE,
+                "&a&lKONFIRMASI",
+                "&7Kedua pemain harus READY."
+        ));
+
+        inventory.setItem(50, createItem(
+                Material.RED_STAINED_GLASS_PANE,
+                "&c&lBATAS TRADE",
+                "&7Periksa item dan uang",
+                "&7sebelum menyatakan READY."
+        ));
+    }
+
+    private String readyStatus(UUID playerId) {
+        return session.isReady(playerId)
+                ? ChatColor.GREEN + "READY"
+                : ChatColor.RED + "NOT READY";
     }
 
     private ItemStack createItem(
