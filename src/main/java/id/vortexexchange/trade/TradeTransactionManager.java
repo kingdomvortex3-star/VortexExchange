@@ -93,12 +93,9 @@ public class TradeTransactionManager {
             boolean refundTwo = refund(two, twoMoney);
 
             logRefundFailures(
-                    oneId,
-                    twoId,
-                    oneMoney,
-                    twoMoney,
-                    refundOne,
-                    refundTwo
+                    oneId, twoId,
+                    oneMoney, twoMoney,
+                    refundOne, refundTwo
             );
 
             return fail(session, "Pembayaran pemain pertama gagal.");
@@ -106,38 +103,14 @@ public class TradeTransactionManager {
 
         if (!deposit(two, oneMoney)) {
             rollbackSecondPayment(
-                    one,
-                    two,
-                    oneId,
-                    twoId,
-                    oneMoney,
-                    twoMoney
+                    one, two,
+                    oneId, twoId,
+                    oneMoney, twoMoney
             );
 
             return fail(
                     session,
-                    "Pembayaran kedua gagal. Periksa saldo dan hubungi admin jika bermasalah."
-            );
-        }
-
-        if (!tradeManager.completeSession(session)) {
-            logRecovery(
-                    oneId,
-                    oneMoney,
-                    "Pembayaran berhasil tetapi sesi gagal diselesaikan. "
-                            + "Perlu pemeriksaan admin."
-            );
-
-            logRecovery(
-                    twoId,
-                    twoMoney,
-                    "Pembayaran berhasil tetapi sesi gagal diselesaikan. "
-                            + "Perlu pemeriksaan admin."
-            );
-
-            return fail(
-                    session,
-                    "Sesi trade bermasalah setelah pembayaran."
+                    "Pembayaran kedua gagal. Hubungi admin jika saldo bermasalah."
             );
         }
 
@@ -160,6 +133,15 @@ public class TradeTransactionManager {
             );
 
             return false;
+        }
+
+        tradeManager.completeSession(session);
+
+        if (!tradeManager.deleteStoredSession(session)) {
+            plugin.getLogger().severe(
+                    "GAGAL MENGHAPUS DATA TRADE SELESAI DARI DATABASE! "
+                            + oneId + " <-> " + twoId
+            );
         }
 
         one.sendMessage("§a§lTRADE BERHASIL!");
@@ -196,32 +178,15 @@ public class TradeTransactionManager {
 
         if (reverseWithdraw) {
             reverseDeposit = deposit(two, twoMoney);
-
-            if (!reverseDeposit) {
-                logRecovery(
-                        twoId,
-                        twoMoney,
-                        "Pengembalian transfer pertama gagal."
-                );
-            }
-        } else {
-            logRecovery(
-                    oneId,
-                    twoMoney,
-                    "Gagal menarik kembali transfer pertama."
-            );
         }
 
         boolean refundOne = refund(one, oneMoney);
         boolean refundTwo = refund(two, twoMoney);
 
         logRefundFailures(
-                oneId,
-                twoId,
-                oneMoney,
-                twoMoney,
-                refundOne,
-                refundTwo
+                oneId, twoId,
+                oneMoney, twoMoney,
+                refundOne, refundTwo
         );
 
         if (!reverseWithdraw || !reverseDeposit) {
