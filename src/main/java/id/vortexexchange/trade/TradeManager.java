@@ -1,7 +1,11 @@
 
 package id.vortexexchange.trade;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,6 +24,10 @@ public class TradeManager {
         }
 
         if (isInTrade(sender) || isInTrade(target)) {
+            return false;
+        }
+
+        if (getRequest(target) != null) {
             return false;
         }
 
@@ -42,7 +50,7 @@ public class TradeManager {
         return request;
     }
 
-    public TradeSession acceptRequest(UUID target) {
+    public synchronized TradeSession acceptRequest(UUID target) {
         TradeRequest request = getRequest(target);
 
         if (request == null) {
@@ -86,8 +94,22 @@ public class TradeManager {
         return sessions.containsKey(player);
     }
 
-    public void removeSession(TradeSession session) {
-        if (session == null) {
+    public List<TradeSession> getActiveSessions() {
+        Set<TradeSession> unique = new HashSet<>(sessions.values());
+
+        List<TradeSession> result = new ArrayList<>();
+
+        for (TradeSession session : unique) {
+            if (session != null && session.isActive()) {
+                result.add(session);
+            }
+        }
+
+        return result;
+    }
+
+    public synchronized void removeSession(TradeSession session) {
+        if (session == null || !session.isActive()) {
             return;
         }
 
@@ -97,7 +119,7 @@ public class TradeManager {
         sessions.remove(session.getPlayerTwo(), session);
     }
 
-    public void completeSession(TradeSession session) {
+    public synchronized void completeSession(TradeSession session) {
         if (session == null || !session.isActive()) {
             return;
         }
@@ -106,5 +128,9 @@ public class TradeManager {
 
         sessions.remove(session.getPlayerOne(), session);
         sessions.remove(session.getPlayerTwo(), session);
+    }
+
+    public void clearRequests() {
+        requests.clear();
     }
 }
