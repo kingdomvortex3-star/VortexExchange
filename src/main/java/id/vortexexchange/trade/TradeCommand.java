@@ -9,19 +9,16 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryView;
 
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class TradeCommand implements CommandExecutor {
 
     private final VortexExchange plugin;
     private final TradeManager tradeManager;
     private final EconomyManager economyManager;
-
-    private final Set<UUID> disabledRequests =
-            ConcurrentHashMap.newKeySet();
 
     public TradeCommand(
             VortexExchange plugin,
@@ -41,17 +38,12 @@ public class TradeCommand implements CommandExecutor {
             String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Perintah ini hanya untuk pemain.");
-            return true;
-        }
-
-        if (!player.hasPermission("vortexexchange.use")) {
-            player.sendMessage(color("&cKamu tidak memiliki izin."));
+            sender.sendMessage(color("&cPerintah ini hanya untuk pemain."));
             return true;
         }
 
         if (!plugin.getConfig().getBoolean("trade.enabled", true)) {
-            player.sendMessage(color("&cPlayer Trade sedang dinonaktifkan."));
+            player.sendMessage(message("trade-disabled"));
             return true;
         }
 
@@ -65,17 +57,22 @@ public class TradeCommand implements CommandExecutor {
             case "deny" -> deny(player);
             case "toggle" -> toggle(player);
             case "money" -> setMoney(player, args);
-            default -> request(player, args[0]);
+            default -> request(player, args);
         }
 
         return true;
     }
 
-    private void request(Player player, String targetName) {
-        Player target = Bukkit.getPlayerExact(targetName);
+    private void request(Player player, String[] args) {
+        if (args.length != 1) {
+            sendHelp(player);
+            return;
+        }
+
+        Player target = Bukkit.getPlayerExact(args[0]);
 
         if (target == null || !target.isOnline()) {
-            player.sendMessage(color("&cPemain tidak ditemukan atau offline."));
+            player.sendMessage(message("player-not-found"));
             return;
         }
 
@@ -84,111 +81,113 @@ public class TradeCommand implements CommandExecutor {
             return;
         }
 
-        if (disabledRequests.contains(target.getUniqueId())) {
-            player.sendMessage(color("&cPemain tersebut menonaktifkan permintaan trade."));
+        if (tradeManager.isInTrade(player.getUniqueId())) {
+            player.sendMessage(color("&cKamu sedang berada dalam trade."));
+            return;
+        }
+
+        if (tradeManager.isInTrade(target.getUniqueId())) {
+            player.sendMessage(color("&cPemain tersebut sedang melakukan trade."));
+            return;
+        }
+
+        if (!plugin.getConfig().getBoolean("trade.require-same-world", true)
+                && false) {
             return;
         }
 
         if (plugin.getConfig().getBoolean("trade.require-same-world", true)
                 && !player.getWorld().equals(target.getWorld())) {
-            player.sendMessage(color("&cKalian harus berada di dunia yang sama."));
+            player.sendMessage(color("&cPemain harus berada di world yang sama."));
             return;
         }
 
-        double maxDistance = plugin.getConfig().getDouble(
-                "trade.max-distance", 15
-        );
+        double maxDistance = plugin.getConfig().getDouble("trade.max-distance", 15);
 
         if (player.getWorld().equals(target.getWorld())
-                && player.getLocation().distanceSquared(target.getLocation())
-                > maxDistance * maxDistance) {
+                && player.getLocation().distance(target.getLocation()) > maxDistance) {
             player.sendMessage(color("&cPemain terlalu jauh."));
             return;
         }
 
-        if (!tradeManager.sendRequest(
-                player.getUniqueId(),
-                target.getUniqueId()
-        )) {
-            player.sendMessage(color("&cKamu atau pemain tersebut sedang trade."));
+        if (!tradeManager.sendRequest(player.getUniqueId(), target.getUniqueId())) {
+            player.sendMessage(color("&cPermintaan trade gagal dikirim."));
             return;
         }
 
-        player.sendMessage(color(
-                "&aPermintaan trade dikirim ke &f" + target.getName()
-        ));
-
-        target.sendMessage(color(
-                "&b" + player.getName()
-                        + " &7ingin melakukan trade denganmu."
-        ));
-
-        target.sendMessage(color(
-                "&aKetik /trade accept &7untuk menerima."
-        ));
-
-        target.sendMessage(color(
-                "&cKetik /trade deny &7untuk menolak."
-        ));
+        player.sendMessage(color("&aPermintaan trade dikirim kepada &f" + target.getName() + "&a."));
+        target.sendMessage(color("&b" + player.getName()
+                + " &eingin melakukan trade denganmu."));
+        target.sendMessage(color("&7Ketik &a/trade accept &7untuk menerima."));
+        target.sendMessage(color("&7Ketik &c/trade deny &7untuk menolak."));
     }
 
     private void accept(Player player) {
-        TradeSession session = tradeManager.acceptRequest(
-                player.getUniqueId()
-        );
+        UUID playerId = player.getUniqueId();
+
+        if (tradeManager.isInTrade(playerId)) {
+            player.sendMessage(color("&cKamu sedang berada dalam trade."));
+            return;
+        }
+
+        TradeRequest request = tradeManager.getRequest(playerId);
+
+        if (request == null) {
+            player.sendMessage(color("&cKamu tidak memiliki permintaan trade."));
+            return;
+        }
+
+        if (request.isExpired(
+                plugin.getConfig().getInt("trade.request-expire-seconds", 60)
+        )) {
+            tradeManager.denyRequest(playerId);
+            player.sendMessage(color("&cPermintaan trade sudah kedaluwarsa."));
+            return;
+        }
+
+        Player requester = Bukkit.getPlayer(request.getSender());
+
+        if (requester == null || !requester.isOnline()) {
+            tradeManager.denyRequest(playerId);
+            player.sendMessage(color("&cPemain yang mengirim permintaan sudah offline."));
+            return;
+        }
+
+        TradeSession session = tradeManager.acceptRequest(playerId);
 
         if (session == null) {
-            player.sendMessage(color("&cTidak ada permintaan trade yang valid."));
+            player.sendMessage(color("&cPermintaan trade gagal diterima."));
             return;
         }
 
-        Player sender = Bukkit.getPlayer(session.getPlayerOne());
-
-        if (sender == null || !sender.isOnline()) {
-            tradeManager.removeSession(session);
-            player.sendMessage(color("&cPengirim sudah offline."));
-            return;
-        }
-
-        player.sendMessage(color("&aTrade dimulai!"));
-        sender.sendMessage(color("&aPermintaan trade diterima!"));
+        player.sendMessage(color("&aTrade dimulai dengan &f" + requester.getName() + "&a."));
+        requester.sendMessage(color("&a" + player.getName() + " menerima trade kamu."));
 
         openTrade(player, session);
-        openTrade(sender, session);
+        openTrade(requester, session);
     }
 
     private void deny(Player player) {
-        TradeRequest request = tradeManager.getRequest(
-                player.getUniqueId()
-        );
+        TradeRequest request = tradeManager.getRequest(player.getUniqueId());
 
-        if (request == null || !tradeManager.denyRequest(
-                player.getUniqueId()
-        )) {
-            player.sendMessage(color("&cTidak ada permintaan trade."));
+        if (request == null) {
+            player.sendMessage(color("&cKamu tidak memiliki permintaan trade."));
             return;
         }
 
-        Player sender = Bukkit.getPlayer(request.getSender());
+        Player requester = Bukkit.getPlayer(request.getSender());
 
-        if (sender != null) {
-            sender.sendMessage(color(
-                    "&cPermintaan trade kamu ditolak."
-            ));
+        tradeManager.denyRequest(player.getUniqueId());
+
+        player.sendMessage(color("&cPermintaan trade ditolak."));
+
+        if (requester != null && requester.isOnline()) {
+            requester.sendMessage(color("&c" + player.getName() + " menolak permintaan trade."));
         }
-
-        player.sendMessage(color("&ePermintaan trade ditolak."));
     }
 
     private void toggle(Player player) {
-        UUID uuid = player.getUniqueId();
-
-        if (disabledRequests.remove(uuid)) {
-            player.sendMessage(color("&aPermintaan trade sekarang aktif."));
-        } else {
-            disabledRequests.add(uuid);
-            player.sendMessage(color("&cPermintaan trade sekarang nonaktif."));
-        }
+        player.sendMessage(color("&eFitur toggle trade belum tersedia di versi ini."));
     }
 
     private void setMoney(Player player, String[] args) {
@@ -198,12 +197,17 @@ public class TradeCommand implements CommandExecutor {
         }
 
         if (!plugin.getConfig().getBoolean("trade.allow-money", true)) {
-            player.sendMessage(color("&cPenawaran uang dinonaktifkan."));
+            player.sendMessage(color("&cPenawaran uang sedang dinonaktifkan."));
             return;
         }
 
         if (!economyManager.isAvailable()) {
-            player.sendMessage(color("&cVault atau ekonomi tidak tersedia."));
+            player.sendMessage(message("economy-not-found"));
+            return;
+        }
+
+        if (!tradeManager.isInTrade(player.getUniqueId())) {
+            player.sendMessage(color("&cKamu tidak sedang melakukan trade."));
             return;
         }
 
@@ -217,58 +221,87 @@ public class TradeCommand implements CommandExecutor {
         }
 
         if (!Double.isFinite(amount) || amount < 0) {
-            player.sendMessage(color("&cJumlah uang tidak valid."));
+            player.sendMessage(color("&cJumlah uang harus 0 atau lebih."));
             return;
         }
 
-        TradeSession session = tradeManager.getSession(
-                player.getUniqueId()
-        );
+        if (!economyManager.has(player, amount)) {
+            player.sendMessage(color("&cSaldo kamu tidak mencukupi."));
+            return;
+        }
+
+        TradeSession session = tradeManager.getSession(player.getUniqueId());
 
         if (session == null || !session.isActive()) {
-            player.sendMessage(color("&cKamu tidak sedang melakukan trade."));
-            return;
-        }
-
-        if (amount > 0 && !economyManager.has(player, amount)) {
-            player.sendMessage(color("&cSaldo kamu tidak cukup."));
+            player.sendMessage(color("&cSesi trade tidak ditemukan."));
             return;
         }
 
         session.setMoney(player.getUniqueId(), amount);
+        session.resetReady();
 
-        player.sendMessage(color(
-                "&aPenawaran uang kamu diatur menjadi &e"
-                        + economyManager.format(amount)
-        ));
+        refreshTrade(session);
 
-        Player opponent = Bukkit.getPlayer(
-                session.getOpponent(player.getUniqueId())
-        );
+        player.sendMessage(color("&aPenawaran uang diatur menjadi &b"
+                + economyManager.format(amount) + "&a."));
 
-        if (opponent != null) {
-            opponent.sendMessage(color(
-                    "&b" + player.getName()
-                            + " &7mengubah penawaran uangnya."
-            ));
+        UUID opponentId = session.getOpponent(player.getUniqueId());
+        Player opponent = Bukkit.getPlayer(opponentId);
+
+        if (opponent != null && opponent.isOnline()) {
+            opponent.sendMessage(color("&b" + player.getName()
+                    + " &amengubah penawaran uang menjadi &b"
+                    + economyManager.format(amount) + "&a."));
         }
     }
 
     private void openTrade(Player player, TradeSession session) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
         TradeGUI gui = new TradeGUI(player.getUniqueId(), session);
         player.openInventory(gui.getInventory());
     }
 
-    private void sendHelp(Player player) {
-        player.sendMessage(color("&b&lVortexExchange &8- &fTrade"));
-        player.sendMessage(color("&e/trade <player> &7- Kirim permintaan"));
-        player.sendMessage(color("&e/trade accept &7- Terima permintaan"));
-        player.sendMessage(color("&e/trade deny &7- Tolak permintaan"));
-        player.sendMessage(color("&e/trade toggle &7- Atur permintaan"));
-        player.sendMessage(color("&e/trade money <jumlah> &7- Atur uang"));
+    private void refreshTrade(TradeSession session) {
+        refreshPlayer(session.getPlayerOne(), session);
+        refreshPlayer(session.getOpponent(session.getPlayerOne()), session);
     }
 
-    private String color(String message) {
-        return ChatColor.translateAlternateColorCodes('&', message);
+    private void refreshPlayer(UUID playerId, TradeSession session) {
+        Player player = Bukkit.getPlayer(playerId);
+
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
+        InventoryView view = player.getOpenInventory();
+        Inventory top = view.getTopInventory();
+
+        if (top.getHolder() instanceof TradeGUI) {
+            TradeGUI updated = new TradeGUI(playerId, session);
+            top.setContents(updated.getInventory().getContents());
+        }
+    }
+
+    private void sendHelp(Player player) {
+        player.sendMessage(color("&b&lVortexExchange &8» &fPlayer Trade"));
+        player.sendMessage(color("&7/trade <player> &8- &fKirim permintaan trade"));
+        player.sendMessage(color("&7/trade accept &8- &fTerima permintaan"));
+        player.sendMessage(color("&7/trade deny &8- &fTolak permintaan"));
+        player.sendMessage(color("&7/trade toggle &8- &fAtur permintaan trade"));
+        player.sendMessage(color("&7/trade money <jumlah> &8- &fTawarkan uang"));
+    }
+
+    private String message(String key) {
+        return color(plugin.getConfig().getString(
+                "messages." + key,
+                "&cTerjadi kesalahan."
+        ));
+    }
+
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&', text);
     }
 }
