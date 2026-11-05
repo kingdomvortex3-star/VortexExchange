@@ -3,8 +3,8 @@ package id.vortexexchange.auction;
 
 import id.vortexexchange.VortexExchange;
 import id.vortexexchange.economy.EconomyManager;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -35,6 +35,10 @@ public class AuctionListener implements Listener {
         this.plugin = plugin;
         this.auctionManager = auctionManager;
         this.economyManager = economyManager;
+    }
+
+    private LanguageManager lang() {
+        return plugin.getLanguageManager();
     }
 
     @EventHandler
@@ -88,23 +92,19 @@ public class AuctionListener implements Listener {
 
     private void purchase(Player buyer, int listingId) {
         if (!processing.add(listingId)) {
-            buyer.sendMessage(color("&cListing sedang diproses."));
+            buyer.sendMessage(lang().get("auction.processing"));
             return;
         }
 
         try {
             if (!plugin.getConfig().getBoolean(
                     "auction.enabled", true)) {
-                buyer.sendMessage(color(
-                        "&cAuction House sedang dinonaktifkan."
-                ));
+                buyer.sendMessage(lang().get("auction.disabled"));
                 return;
             }
 
             if (!economyManager.isAvailable()) {
-                buyer.sendMessage(color(
-                        "&cEkonomi Vault tidak tersedia."
-                ));
+                buyer.sendMessage(lang().get("economy.missing"));
                 return;
             }
 
@@ -112,9 +112,7 @@ public class AuctionListener implements Listener {
                     auctionManager.getListing(listingId);
 
             if (listing == null || listing.isExpired()) {
-                buyer.sendMessage(color(
-                        "&cListing sudah tidak tersedia."
-                ));
+                buyer.sendMessage(lang().get("auction.unavailable"));
                 buyer.closeInventory();
                 return;
             }
@@ -122,14 +120,12 @@ public class AuctionListener implements Listener {
             UUID sellerUUID = listing.getSellerUUID();
 
             if (sellerUUID == null) {
-                buyer.sendMessage(color("&cData penjual tidak valid."));
+                buyer.sendMessage(lang().get("auction.invalid-seller"));
                 return;
             }
 
             if (sellerUUID.equals(buyer.getUniqueId())) {
-                buyer.sendMessage(color(
-                        "&cKamu tidak bisa membeli barang sendiri."
-                ));
+                buyer.sendMessage(lang().get("auction.own-item"));
                 return;
             }
 
@@ -137,9 +133,7 @@ public class AuctionListener implements Listener {
 
             if (item == null || item.getType().isAir()
                     || item.getAmount() <= 0) {
-                buyer.sendMessage(color(
-                        "&cData barang tidak valid. Hubungi admin."
-                ));
+                buyer.sendMessage(lang().get("auction.invalid-item"));
 
                 plugin.getLogger().severe(
                         "Item listing tidak valid. ID: " + listingId
@@ -150,12 +144,12 @@ public class AuctionListener implements Listener {
             double price = listing.getPrice();
 
             if (!Double.isFinite(price) || price <= 0) {
-                buyer.sendMessage(color("&cHarga listing tidak valid."));
+                buyer.sendMessage(lang().get("auction.invalid-price"));
                 return;
             }
 
             if (!economyManager.has(buyer, price)) {
-                buyer.sendMessage(color("&cSaldo kamu tidak cukup."));
+                buyer.sendMessage(lang().get("auction.no-balance"));
                 return;
             }
 
@@ -163,7 +157,7 @@ public class AuctionListener implements Listener {
                     Bukkit.getOfflinePlayer(sellerUUID);
 
             if (!economyManager.withdraw(buyer, price)) {
-                buyer.sendMessage(color("&cPembayaran gagal."));
+                buyer.sendMessage(lang().get("auction.payment-failed"));
                 return;
             }
 
@@ -172,13 +166,15 @@ public class AuctionListener implements Listener {
             try {
                 deleted = auctionManager.deleteListing(listingId);
             } catch (SQLException exception) {
-                refundBuyer(buyer, listingId, price,
+                refundBuyer(
+                        buyer,
+                        listingId,
+                        price,
                         "Gagal menghapus listing: "
-                                + exception.getMessage());
+                                + exception.getMessage()
+                );
 
-                buyer.sendMessage(color(
-                        "&cTransaksi gagal. Periksa saldo kamu."
-                ));
+                buyer.sendMessage(lang().get("auction.transaction-error"));
                 return;
             }
 
@@ -190,15 +186,12 @@ public class AuctionListener implements Listener {
                         "Listing tidak berhasil dihapus."
                 );
 
-                buyer.sendMessage(color(
-                        "&cListing sudah tidak tersedia."
-                ));
+                buyer.sendMessage(lang().get("auction.unavailable"));
                 return;
             }
 
             if (!economyManager.deposit(seller, price)) {
                 boolean restored = restoreListing(listing);
-
                 boolean refunded = economyManager.deposit(buyer, price);
 
                 logRecovery(
@@ -210,9 +203,7 @@ public class AuctionListener implements Listener {
                                 + ", buyer refunded=" + refunded
                 );
 
-                buyer.sendMessage(color(
-                        "&cTransaksi bermasalah. Hubungi admin."
-                ));
+                buyer.sendMessage(lang().get("auction.transaction-error"));
                 return;
             }
 
@@ -239,47 +230,49 @@ public class AuctionListener implements Listener {
                                 + exception.getMessage()
                 );
 
-                buyer.sendMessage(color(
-                        "&cPembayaran berhasil, tetapi pengiriman barang "
-                                + "bermasalah. Hubungi admin."
-                ));
-
+                buyer.sendMessage(lang().get("auction.delivery-error"));
                 return;
             }
 
-            buyer.sendMessage(color(
-                    "&aBerhasil membeli barang seharga &e"
-                            + economyManager.format(price)
-            ));
+            buyer.sendMessage(
+                    lang().get(
+                            "auction.purchase-success",
+                            "price",
+                            economyManager.format(price)
+                    )
+            );
 
             Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
             if (onlineSeller != null && onlineSeller.isOnline()) {
-                onlineSeller.sendMessage(color(
-                        "&aBarang kamu dibeli oleh &f" + buyer.getName()
-                ));
+                onlineSeller.sendMessage(
+                        lang().get(
+                                "auction.sold",
+                                "player",
+                                buyer.getName()
+                        )
+                );
 
-                onlineSeller.sendMessage(color(
-                        "&aKamu menerima &e"
-                                + economyManager.format(price)
-                ));
+                onlineSeller.sendMessage(
+                        lang().get(
+                                "auction.received-money",
+                                "price",
+                                economyManager.format(price)
+                        )
+                );
             }
 
             buyer.closeInventory();
 
         } catch (SQLException exception) {
-            buyer.sendMessage(color(
-                    "&cTerjadi kesalahan database."
-            ));
+            buyer.sendMessage(lang().get("auction.database-error"));
 
             plugin.getLogger().severe(
                     "Auction purchase error: " + exception.getMessage()
             );
 
         } catch (RuntimeException exception) {
-            buyer.sendMessage(color(
-                    "&cTerjadi kesalahan saat membeli barang. Hubungi admin."
-            ));
+            buyer.sendMessage(lang().get("auction.general-error"));
 
             plugin.getLogger().severe(
                     "Auction runtime error: " + exception.getMessage()
@@ -350,9 +343,5 @@ public class AuctionListener implements Listener {
                         + ", Amount=" + amount
                         + ", Reason=" + reason
         );
-    }
-
-    private String color(String message) {
-        return ChatColor.translateAlternateColorCodes('&', message);
     }
 }
