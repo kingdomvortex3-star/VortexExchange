@@ -24,7 +24,7 @@ public class TradeRecoveryManager {
         this.tradeManager = tradeManager;
     }
 
-    public int recoverAll() {
+    public synchronized int recoverAll() {
         if (plugin.getDatabaseManager() == null) {
             plugin.getLogger().severe(
                     "Trade recovery gagal: database tidak tersedia."
@@ -32,10 +32,22 @@ public class TradeRecoveryManager {
             return 0;
         }
 
-        Connection connection =
-                plugin.getDatabaseManager().getConnection();
+        Connection connection;
+
+        try {
+            connection = plugin.getDatabaseManager().getConnection();
+        } catch (RuntimeException exception) {
+            plugin.getLogger().severe(
+                    "Trade recovery gagal mengambil koneksi: "
+                            + exception.getMessage()
+            );
+            return 0;
+        }
 
         if (connection == null) {
+            plugin.getLogger().severe(
+                    "Trade recovery gagal: koneksi database null."
+            );
             return 0;
         }
 
@@ -47,13 +59,21 @@ public class TradeRecoveryManager {
             }
         }
 
+        plugin.getLogger().info(
+                "Trade recovery selesai. Sesi dipulihkan: " + recovered
+        );
+
         return recovered;
     }
 
-    private boolean recoverSession(
+    private synchronized boolean recoverSession(
             Connection connection,
             TradeSession session
     ) {
+        if (session == null || !session.isActive()) {
+            return false;
+        }
+
         UUID one = session.getPlayerOne();
         UUID two = session.getPlayerTwo();
 
@@ -87,10 +107,12 @@ public class TradeRecoveryManager {
 
             connection.commit();
 
+            session.setCancelled(true);
             tradeManager.removeSession(session);
 
             plugin.getLogger().info(
-                    "Trade recovery berhasil: " + one + " <-> " + two
+                    "Trade recovery berhasil: "
+                            + one + " <-> " + two
             );
 
             return true;
@@ -129,7 +151,10 @@ public class TradeRecoveryManager {
             }
 
             statement.setString(1, player.toString());
-            statement.setString(2, ItemSerializer.serialize(item));
+            statement.setString(
+                    2,
+                    ItemSerializer.serialize(item.clone())
+            );
             statement.setLong(3, System.currentTimeMillis());
 
             statement.executeUpdate();
