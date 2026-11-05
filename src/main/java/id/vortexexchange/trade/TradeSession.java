@@ -24,7 +24,9 @@ public class TradeSession {
     public TradeSession(UUID playerOne, UUID playerTwo) {
         if (playerOne == null || playerTwo == null
                 || playerOne.equals(playerTwo)) {
-            throw new IllegalArgumentException("Player trade tidak valid.");
+            throw new IllegalArgumentException(
+                    "Player trade tidak valid."
+            );
         }
 
         this.playerOne = playerOne;
@@ -67,37 +69,28 @@ public class TradeSession {
             return new ArrayList<>();
         }
 
-        List<ItemStack> result = new ArrayList<>();
-
-        for (ItemStack item : playerItems) {
-            result.add(item.clone());
-        }
-
-        return result;
+        return cloneItems(playerItems);
     }
 
-    public synchronized void setItems(UUID player, List<ItemStack> newItems) {
+    public synchronized void setItems(
+            UUID player,
+            List<ItemStack> newItems
+    ) {
         if (!isParticipant(player) || !isActive()) {
             return;
         }
 
-        List<ItemStack> copiedItems = new ArrayList<>();
-
-        if (newItems != null) {
-            for (ItemStack item : newItems) {
-                if (item != null && !item.getType().isAir()) {
-                    copiedItems.add(item.clone());
-                }
-            }
-        }
-
-        items.put(player, copiedItems);
+        items.put(player, cloneItems(newItems));
         resetReady();
     }
 
-    public synchronized boolean addItem(UUID player, ItemStack item) {
+    public synchronized boolean addItem(
+            UUID player,
+            ItemStack item
+    ) {
         if (!isParticipant(player) || !isActive()
-                || item == null || item.getType().isAir()) {
+                || item == null || item.getType().isAir()
+                || item.getAmount() <= 0) {
             return false;
         }
 
@@ -113,7 +106,10 @@ public class TradeSession {
         return true;
     }
 
-    public synchronized ItemStack removeItem(UUID player, int index) {
+    public synchronized ItemStack removeItem(
+            UUID player,
+            int index
+    ) {
         if (!isParticipant(player) || !isActive()) {
             return null;
         }
@@ -199,6 +195,48 @@ public class TradeSession {
         if (cancelled) {
             this.completed = false;
         }
+    }
+
+    public synchronized void restoreData(
+            List<ItemStack> playerOneItems,
+            List<ItemStack> playerTwoItems,
+            double moneyOne,
+            double moneyTwo
+    ) {
+        if (!isActive()) {
+            return;
+        }
+
+        if (!Double.isFinite(moneyOne)
+                || !Double.isFinite(moneyTwo)
+                || moneyOne < 0
+                || moneyTwo < 0) {
+            throw new IllegalArgumentException(
+                    "Data uang trade tidak valid."
+            );
+        }
+
+        items.put(playerOne, cloneItems(playerOneItems));
+        items.put(playerTwo, cloneItems(playerTwoItems));
+
+        money.put(playerOne, moneyOne);
+        money.put(playerTwo, moneyTwo);
+
+        resetReady();
+    }
+
+    private List<ItemStack> cloneItems(List<ItemStack> source) {
+        List<ItemStack> copy = new ArrayList<>();
+
+        if (source != null) {
+            for (ItemStack item : source) {
+                if (item != null && !item.getType().isAir()) {
+                    copy.add(item.clone());
+                }
+            }
+        }
+
+        return copy;
     }
 
     private boolean isParticipant(UUID player) {
