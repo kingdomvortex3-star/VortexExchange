@@ -1,0 +1,40 @@
+
+settings:
+  prefix: "&b&lVortexExchange &8»"
+  language: "id"
+  debug: false
+
+auction:
+  enabled: true
+  max-listings-per-player: 10
+  listing-duration-hours: 48
+  minimum-price: 1
+  tax-percent: 0
+  expired-items-return: true
+
+trade:
+  enabled: true
+  request-expire-seconds: 60
+  max-distance: 15
+  require-same-world: true
+  cooldown-seconds: 5
+  allow-money: true
+  allow-items: true
+  cancel-on-damage: true
+  cancel-on-disconnect: true
+
+gui:
+  title: "&b&lVortexExchange"
+  auction-title: "&0Auction House"
+  trade-title: "&0Player Trade"
+  filler: "GRAY_STAINED_GLASS_PANE"
+  accent: "LIGHT_BLUE_STAINED_GLASS_PANE"
+
+messages:
+  no-permission: "&cKamu tidak memiliki izin."
+  player-only: "&cPerintah ini hanya untuk pemain."
+  player-not-found: "&cPemain tidak ditemukan."
+  economy-not-found: "&cVault atau plugin ekonomi tidak ditemukan."
+  auction-disabled: "&cAuction House sedang dinonaktifkan."
+  trade-disabled: "&cPlayer Trade sedang dinonaktifkan."
+  transaction-success: "&aTransaksi berhasil!"
