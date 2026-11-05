@@ -65,7 +65,7 @@ public class DatabaseManager {
             statement.execute("PRAGMA foreign_keys = ON");
             statement.execute("PRAGMA busy_timeout = 5000");
             statement.execute("PRAGMA journal_mode = WAL");
-            statement.execute("PRAGMA synchronous = NORMAL");
+            statement.execute("PRAGMA synchronous = FULL");
         }
     }
 
@@ -98,6 +98,31 @@ public class DatabaseManager {
             """);
 
             statement.execute("""
+                CREATE TABLE IF NOT EXISTS active_trades (
+                    session_id TEXT PRIMARY KEY,
+                    player_one TEXT NOT NULL,
+                    player_two TEXT NOT NULL,
+                    player_one_items TEXT NOT NULL DEFAULT '',
+                    player_two_items TEXT NOT NULL DEFAULT '',
+                    money_one REAL NOT NULL DEFAULT 0,
+                    money_two REAL NOT NULL DEFAULT 0,
+                    updated_at INTEGER NOT NULL
+                )
+            """);
+
+            statement.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                idx_active_trades_player_one
+                ON active_trades(player_one)
+            """);
+
+            statement.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                idx_active_trades_player_two
+                ON active_trades(player_two)
+            """);
+
+            statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_auctions_expiry
                 ON auctions(expires_at)
             """);
@@ -120,6 +145,11 @@ public class DatabaseManager {
             statement.execute("""
                 CREATE INDEX IF NOT EXISTS idx_trade_history_player_two
                 ON trade_history(player_two)
+            """);
+
+            statement.execute("""
+                CREATE INDEX IF NOT EXISTS idx_active_trades_updated
+                ON active_trades(updated_at)
             """);
         }
     }
