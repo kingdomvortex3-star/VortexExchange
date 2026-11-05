@@ -8,6 +8,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -57,7 +58,8 @@ public class TradeListener implements Listener {
 
         TradeSession session = gui.getSession();
 
-        if (!session.isActive()
+        if (session == null
+                || !session.isActive()
                 || !gui.getViewer().equals(player.getUniqueId())) {
             return;
         }
@@ -97,14 +99,17 @@ public class TradeListener implements Listener {
             TradeSession session,
             InventoryClickEvent event
     ) {
-        if (!plugin.getConfig().getBoolean("trade.allow-items", true)) {
-            player.sendMessage(color("&cPenawaran item sedang dinonaktifkan."));
+        if (!plugin.getConfig().getBoolean(
+                "trade.allow-items", true)) {
+            player.sendMessage(color(
+                    "&cPenawaran item sedang dinonaktifkan."
+            ));
             return;
         }
 
-        if (event.getClick().isShiftClick()
-                || event.getClick().isKeyboardClick()
-                || event.getClick().isCreativeAction()) {
+        ClickType click = event.getClick();
+
+        if (click != ClickType.LEFT && click != ClickType.RIGHT) {
             return;
         }
 
@@ -119,14 +124,18 @@ public class TradeListener implements Listener {
         List<ItemStack> items = session.getItems(uuid);
 
         if (items.size() >= OWN_SLOTS.length) {
-            player.sendMessage(color("&cSlot penawaran sudah penuh."));
+            player.sendMessage(color(
+                    "&cSlot penawaran sudah penuh."
+            ));
             return;
         }
 
         ItemStack offeredItem = clicked.clone();
 
         if (!session.addItem(uuid, offeredItem)) {
-            player.sendMessage(color("&cItem gagal ditambahkan ke penawaran."));
+            player.sendMessage(color(
+                    "&cItem gagal ditambahkan ke penawaran."
+            ));
             return;
         }
 
@@ -134,7 +143,9 @@ public class TradeListener implements Listener {
 
         refresh(session);
 
-        player.sendMessage(color("&aItem berhasil ditambahkan ke penawaran."));
+        player.sendMessage(color(
+                "&aItem berhasil ditambahkan ke penawaran."
+        ));
     }
 
     private void removeOffer(
@@ -175,7 +186,10 @@ public class TradeListener implements Listener {
         refresh(session);
     }
 
-    private void toggleReady(Player player, TradeSession session) {
+    private void toggleReady(
+            Player player,
+            TradeSession session
+    ) {
         if (!session.isActive()) {
             return;
         }
@@ -206,7 +220,10 @@ public class TradeListener implements Listener {
         }
     }
 
-    private void cancelTrade(TradeSession session, String message) {
+    private void cancelTrade(
+            TradeSession session,
+            String message
+    ) {
         if (session == null || !session.isActive()) {
             return;
         }
@@ -230,7 +247,10 @@ public class TradeListener implements Listener {
         closePlayer(session.getPlayerTwo());
     }
 
-    private void returnItems(UUID uuid, List<ItemStack> items) {
+    private void returnItems(
+            UUID uuid,
+            List<ItemStack> items
+    ) {
         Player player = Bukkit.getPlayer(uuid);
 
         for (ItemStack item : items) {
@@ -241,7 +261,8 @@ public class TradeListener implements Listener {
             if (player == null || !player.isOnline()) {
                 if (!mailboxManager.store(uuid, item.clone())) {
                     plugin.getLogger().severe(
-                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: " + uuid
+                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: "
+                                    + uuid
                     );
                 }
                 continue;
@@ -263,24 +284,34 @@ public class TradeListener implements Listener {
         refreshPlayer(session.getPlayerTwo(), session);
     }
 
-    private void refreshPlayer(UUID uuid, TradeSession session) {
+    private void refreshPlayer(
+            UUID uuid,
+            TradeSession session
+    ) {
         Player player = Bukkit.getPlayer(uuid);
 
         if (player == null || !player.isOnline()) {
             return;
         }
 
-        Inventory current = player.getOpenInventory().getTopInventory();
+        Inventory current =
+                player.getOpenInventory().getTopInventory();
 
         if (!(current.getHolder() instanceof TradeGUI)) {
             return;
         }
 
         TradeGUI updated = new TradeGUI(uuid, session);
-        current.setContents(updated.getInventory().getContents());
+
+        current.setContents(
+                updated.getInventory().getContents()
+        );
     }
 
-    private void notifyPlayers(TradeSession session, String message) {
+    private void notifyPlayers(
+            TradeSession session,
+            String message
+    ) {
         for (UUID uuid : List.of(
                 session.getPlayerOne(),
                 session.getPlayerTwo()
@@ -298,8 +329,8 @@ public class TradeListener implements Listener {
 
         if (player != null
                 && player.isOnline()
-                && player.getOpenInventory().getTopInventory()
-                .getHolder() instanceof TradeGUI) {
+                && player.getOpenInventory()
+                .getTopInventory().getHolder() instanceof TradeGUI) {
             player.closeInventory();
         }
     }
@@ -314,13 +345,14 @@ public class TradeListener implements Listener {
 
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
-        if (!(event.getInventory().getHolder() instanceof TradeGUI gui)) {
+        if (!(event.getInventory().getHolder()
+                instanceof TradeGUI gui)) {
             return;
         }
 
         TradeSession session = gui.getSession();
 
-        if (session.isActive()) {
+        if (session != null && session.isActive()) {
             cancelTrade(
                     session,
                     "&cTrade dibatalkan karena GUI ditutup."
