@@ -29,7 +29,7 @@ public class TradeTransactionManager {
     public synchronized boolean complete(TradeSession session) {
         if (session == null
                 || !session.isActive()
-                || !session.bothReady()) {
+                || !session.areBothReady()) {
             return false;
         }
 
@@ -72,7 +72,11 @@ public class TradeTransactionManager {
 
         if (!withdraw(two, twoMoney)) {
             if (!refund(one, oneMoney)) {
-                logRecovery(oneId, oneMoney);
+                logRecovery(
+                        oneId,
+                        oneMoney,
+                        "Pengembalian setelah penarikan kedua gagal"
+                );
             }
 
             return fail(session, "Gagal mengambil uang pemain kedua.");
@@ -83,11 +87,11 @@ public class TradeTransactionManager {
             boolean refundTwo = refund(two, twoMoney);
 
             if (!refundOne) {
-                logRecovery(oneId, oneMoney);
+                logRecovery(oneId, oneMoney, "Refund pemain pertama gagal");
             }
 
             if (!refundTwo) {
-                logRecovery(twoId, twoMoney);
+                logRecovery(twoId, twoMoney, "Refund pemain kedua gagal");
             }
 
             return fail(session, "Pembayaran pertama gagal.");
@@ -101,31 +105,33 @@ public class TradeTransactionManager {
                 boolean refundTwo = refund(two, twoMoney);
 
                 if (!refundOne) {
-                    logRecovery(oneId, oneMoney);
+                    logRecovery(oneId, oneMoney, "Refund pemain pertama gagal");
                 }
 
                 if (!refundTwo) {
-                    logRecovery(twoId, twoMoney);
+                    logRecovery(twoId, twoMoney, "Refund pemain kedua gagal");
                 }
             } else {
-                boolean refundTwo = refund(two, twoMoney);
-
-                plugin.getLogger().severe(
-                        "ROLLBACK TRADE GAGAL! "
-                                + "Pemain pertama: " + oneId
-                                + ", pemain kedua: " + twoId
-                                + ", uang pertama: " + oneMoney
-                                + ", uang kedua: " + twoMoney
+                logRecovery(
+                        oneId,
+                        oneMoney - twoMoney,
+                        "Pembayaran balik gagal setelah pembayaran pertama berhasil"
                 );
 
+                boolean refundTwo = refund(two, twoMoney);
+
                 if (!refundTwo) {
-                    logRecovery(twoId, twoMoney);
+                    logRecovery(
+                            twoId,
+                            twoMoney,
+                            "Refund pemain kedua gagal"
+                    );
                 }
             }
 
             return fail(
                     session,
-                    "Pembayaran kedua gagal. Periksa saldo dan hubungi admin jika berubah."
+                    "Pembayaran kedua gagal. Hubungi admin jika saldo berubah."
             );
         }
 
@@ -202,11 +208,16 @@ public class TradeTransactionManager {
         return false;
     }
 
-    private void logRecovery(UUID player, double amount) {
+    private void logRecovery(
+            UUID player,
+            double amount,
+            String reason
+    ) {
         plugin.getLogger().severe(
-                "REFUND TRADE PERLU PEMERIKSAAN MANUAL: "
-                        + "player=" + player
-                        + ", amount=" + amount
+                "TRADE MEMERLUKAN PEMERIKSAAN MANUAL! "
+                        + "Player=" + player
+                        + ", Amount=" + amount
+                        + ", Reason=" + reason
         );
     }
 }
