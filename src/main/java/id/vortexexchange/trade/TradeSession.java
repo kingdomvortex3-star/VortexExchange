@@ -4,7 +4,9 @@ package id.vortexexchange.trade;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class TradeSession {
@@ -12,14 +14,9 @@ public class TradeSession {
     private final UUID playerOne;
     private final UUID playerTwo;
 
-    private final List<ItemStack> itemsOne = new ArrayList<>();
-    private final List<ItemStack> itemsTwo = new ArrayList<>();
-
-    private double moneyOne;
-    private double moneyTwo;
-
-    private boolean readyOne;
-    private boolean readyTwo;
+    private final Map<UUID, List<ItemStack>> items = new HashMap<>();
+    private final Map<UUID, Double> money = new HashMap<>();
+    private final Map<UUID, Boolean> ready = new HashMap<>();
 
     private boolean completed;
     private boolean cancelled;
@@ -27,11 +24,20 @@ public class TradeSession {
     public TradeSession(UUID playerOne, UUID playerTwo) {
         if (playerOne == null || playerTwo == null
                 || playerOne.equals(playerTwo)) {
-            throw new IllegalArgumentException("Pemain trade tidak valid.");
+            throw new IllegalArgumentException("Player trade tidak valid.");
         }
 
         this.playerOne = playerOne;
         this.playerTwo = playerTwo;
+
+        items.put(playerOne, new ArrayList<>());
+        items.put(playerTwo, new ArrayList<>());
+
+        money.put(playerOne, 0.0);
+        money.put(playerTwo, 0.0);
+
+        ready.put(playerOne, false);
+        ready.put(playerTwo, false);
     }
 
     public UUID getPlayerOne() {
@@ -40,10 +46,6 @@ public class TradeSession {
 
     public UUID getPlayerTwo() {
         return playerTwo;
-    }
-
-    public boolean contains(UUID player) {
-        return playerOne.equals(player) || playerTwo.equals(player);
     }
 
     public UUID getOpponent(UUID player) {
@@ -58,117 +60,149 @@ public class TradeSession {
         return null;
     }
 
-    public List<ItemStack> getItems(UUID player) {
-        List<ItemStack> source = getSource(player);
-        List<ItemStack> copy = new ArrayList<>();
+    public synchronized List<ItemStack> getItems(UUID player) {
+        List<ItemStack> playerItems = items.get(player);
 
-        for (ItemStack item : source) {
-            copy.add(item.clone());
+        if (playerItems == null) {
+            return new ArrayList<>();
         }
 
-        return copy;
+        List<ItemStack> result = new ArrayList<>();
+
+        for (ItemStack item : playerItems) {
+            result.add(item.clone());
+        }
+
+        return result;
     }
 
-    public void setItems(UUID player, List<ItemStack> items) {
-        List<ItemStack> target = getSource(player);
+    public synchronized void setItems(UUID player, List<ItemStack> newItems) {
+        if (!isParticipant(player) || !isActive()) {
+            return;
+        }
 
-        target.clear();
+        List<ItemStack> copiedItems = new ArrayList<>();
 
-        for (ItemStack item : items) {
-            if (item != null && !item.getType().isAir()) {
-                target.add(item.clone());
+        if (newItems != null) {
+            for (ItemStack item : newItems) {
+                if (item != null && !item.getType().isAir()) {
+                    copiedItems.add(item.clone());
+                }
             }
         }
 
+        items.put(player, copiedItems);
         resetReady();
     }
 
-    public double getMoney(UUID player) {
-        if (playerOne.equals(player)) {
-            return moneyOne;
+    public synchronized boolean addItem(UUID player, ItemStack item) {
+        if (!isParticipant(player) || !isActive()
+                || item == null || item.getType().isAir()) {
+            return false;
         }
 
-        if (playerTwo.equals(player)) {
-            return moneyTwo;
+        List<ItemStack> playerItems = items.get(player);
+
+        if (playerItems.size() >= 14) {
+            return false;
         }
 
-        return 0;
+        playerItems.add(item.clone());
+        resetReady();
+
+        return true;
     }
 
-    public void setMoney(UUID player, double amount) {
-        if (!Double.isFinite(amount) || amount < 0) {
-            throw new IllegalArgumentException("Jumlah uang tidak valid.");
+    public synchronized ItemStack removeItem(UUID player, int index) {
+        if (!isParticipant(player) || !isActive()) {
+            return null;
         }
 
-        if (playerOne.equals(player)) {
-            moneyOne = amount;
-        } else if (playerTwo.equals(player)) {
-            moneyTwo = amount;
-        } else {
-            throw new IllegalArgumentException("Pemain bukan anggota trade.");
+        List<ItemStack> playerItems = items.get(player);
+
+        if (index < 0 || index >= playerItems.size()) {
+            return null;
         }
 
+        ItemStack removed = playerItems.remove(index).clone();
+        resetReady();
+
+        return removed;
+    }
+
+    public synchronized double getMoney(UUID player) {
+        return money.getOrDefault(player, 0.0);
+    }
+
+    public synchronized void setMoney(UUID player, double amount) {
+        if (!isParticipant(player) || !isActive()
+                || !Double.isFinite(amount) || amount < 0) {
+            return;
+        }
+
+        money.put(player, amount);
         resetReady();
     }
 
-    public boolean isReady(UUID player) {
-        if (playerOne.equals(player)) {
-            return readyOne;
+    public synchronized boolean isReady(UUID player) {
+        return Boolean.TRUE.equals(ready.get(player));
+    }
+
+    public synchronized void setReady(UUID player, boolean value) {
+        if (!isParticipant(player) || !isActive()) {
+            return;
         }
 
-        if (playerTwo.equals(player)) {
-            return readyTwo;
+        ready.put(player, value);
+    }
+
+    public synchronized void toggleReady(UUID player) {
+        if (!isParticipant(player) || !isActive()) {
+            return;
         }
 
-        return false;
+        ready.put(player, !isReady(player));
     }
 
-    public void setReady(UUID player, boolean ready) {
-        if (playerOne.equals(player)) {
-            readyOne = ready;
-        } else if (playerTwo.equals(player)) {
-            readyTwo = ready;
-        }
+    public synchronized void resetReady() {
+        ready.put(playerOne, false);
+        ready.put(playerTwo, false);
     }
 
-    public boolean bothReady() {
-        return readyOne && readyTwo;
+    public synchronized boolean areBothReady() {
+        return isReady(playerOne) && isReady(playerTwo);
     }
 
-    public void resetReady() {
-        readyOne = false;
-        readyTwo = false;
-    }
-
-    public boolean isCompleted() {
-        return completed;
-    }
-
-    public void setCompleted(boolean completed) {
-        this.completed = completed;
-    }
-
-    public boolean isCancelled() {
-        return cancelled;
-    }
-
-    public void setCancelled(boolean cancelled) {
-        this.cancelled = cancelled;
-    }
-
-    public boolean isActive() {
+    public synchronized boolean isActive() {
         return !completed && !cancelled;
     }
 
-    private List<ItemStack> getSource(UUID player) {
-        if (playerOne.equals(player)) {
-            return itemsOne;
-        }
+    public synchronized boolean isCompleted() {
+        return completed;
+    }
 
-        if (playerTwo.equals(player)) {
-            return itemsTwo;
-        }
+    public synchronized void setCompleted(boolean completed) {
+        this.completed = completed;
 
-        throw new IllegalArgumentException("Pemain bukan anggota trade.");
+        if (completed) {
+            this.cancelled = false;
+        }
+    }
+
+    public synchronized boolean isCancelled() {
+        return cancelled;
+    }
+
+    public synchronized void setCancelled(boolean cancelled) {
+        this.cancelled = cancelled;
+
+        if (cancelled) {
+            this.completed = false;
+        }
+    }
+
+    private boolean isParticipant(UUID player) {
+        return player != null
+                && (playerOne.equals(player) || playerTwo.equals(player));
     }
 }
