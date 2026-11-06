@@ -1,203 +1,176 @@
-VortexExchange
 
-<div align="center">VORTEXEXCHANGE
+# VortexExchange
 
-Advanced Auction House & Player Trading System
+<p align="center">
+  <img src="https://img.shields.io/badge/VortexTeam-Developer-00AEEF?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Minecraft-26.3-brightgreen?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Java-25-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge" />
+</p>
 
-Developed by VortexTeam
-
-""License" (https://img.shields.io/badge/License-Proprietary-red)" (LICENSE)
-""Minecraft" (https://img.shields.io/badge/Minecraft-26.3-brightgreen)" (#requirements)
-""Java" (https://img.shields.io/badge/Java-25-orange)" (#requirements)
-""Discord" (https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord)" (https://discord.gg/CjvTjVVXK)
-
-"Discord Community" (https://discord.gg/CjvTjVVXK)
-
-</div>---
-
-VortexExchange is a Minecraft server plugin that combines an advanced Auction House and Player Trading system.
-
-It provides an integrated marketplace where players can list items for sale, trade items and in-game currency, and receive items through a persistent Mailbox system.
-
-Designed for Paper-based Minecraft servers, VortexExchange focuses on convenient trading, persistent data storage, and transaction recovery.
+<p align="center">
+  <strong>Advanced Auction House & Player Trading System</strong>
+  <br />
+  A complete trading solution for Minecraft servers.
+  <br /><br />
+  <a href="https://discord.gg/CjvTjVVXK">
+    <img src="https://img.shields.io/badge/Join%20Our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
+  </a>
+</p>
 
 ---
 
-Features
+## Overview
 
-Category| Description
-Auction House| Player-to-player marketplace for selling and listing items
-Global Announcements| Broadcasts new auction listings to all online players
-Listing Management| Configurable listing limits, minimum prices, and expiration
-Auction Expiration| Automatically handles expired listings
-Player Trading| Direct player-to-player item and money trading
-Trade GUI| Inventory-based trading interface
-Ready Confirmation| Both players must confirm before completing a trade
-Trade Protection| Distance, world, cooldown, damage, and disconnect restrictions
-Mailbox| Stores items awaiting delivery to players
-Trade Recovery| Persistent records for recovering unfinished trades
-SQLite Database| Persistent storage for plugin data
-Multi-Language| Indonesian and English message support
-Vault Integration| Connects trading and auction transactions to the server economy
+**VortexExchange** is an advanced Minecraft plugin developed by **VortexTeam**.
 
----
+It combines an Auction House, Player Trading, Mailbox, and Trade Recovery system into one integrated plugin.
 
-Auction House
+Designed to provide a convenient and reliable trading experience for Minecraft server communities.
 
-The Auction House allows players to sell items to other players.
+## Features
 
-Features:
+| Feature | Description |
+|:--|:--|
+| Auction House | Player-to-player item marketplace |
+| Global Announcements | Announces new auction listings to online players |
+| Listing Management | Configurable listing limits and minimum prices |
+| Auction Expiration | Automatically handles expired listings |
+| Player Trading | Exchange items and in-game currency |
+| Trade GUI | Inventory-based trading interface |
+| Ready Confirmation | Both players must confirm a transaction |
+| Trade Protection | Distance, world, cooldown, damage and disconnect restrictions |
+| Mailbox | Stores items awaiting delivery |
+| Trade Recovery | Recovery support for unfinished trades |
+| SQLite Database | Persistent plugin data storage |
+| Vault Integration | Economy integration through Vault |
+| Multi-Language | Indonesian and English support |
 
-- Create listings with a custom selling price.
-- Global announcements when a new item is listed.
-- Display seller name, item information, quantity, and price.
-- Configurable maximum listings per player.
-- Configurable minimum selling price.
-- Configurable listing duration.
-- Automatic listing expiration.
-- Return expired items through the Mailbox.
-- Configurable auction tax.
+## Auction House
 
-Example:
+A player marketplace that allows users to sell their items.
 
+**Features**
+- Create item listings with custom prices.
+- Broadcast new listings to all online players.
+- Display seller, item, quantity and price.
+- Configure maximum listings per player.
+- Configure minimum selling prices.
+- Configure listing expiration.
+- Automatically handle expired listings.
+- Return expired items through Mailbox.
+- Configure auction tax.
+
+**Command**
+```text
+/ah
+/ah sell <price>
+```
+
+**Example**
+```text
 /ah sell 5000
+```
 
-This lists the item in the player's main hand for 5,000 in-game currency.
+Lists the item in your main hand for 5,000 in-game currency.
 
----
+## Player Trading
 
-Player Trading
+A direct trading system between two players.
 
-The Player Trading system allows two players to exchange items and in-game currency.
-
-Features:
-
-- Send trade requests to other players.
-- Accept or deny incoming requests.
-- GUI-based item exchange.
-- Money trading through the economy system.
-- Individual player ready confirmation.
-- Trade completion after both players confirm.
-- Configurable trading distance.
-- Optional same-world restriction.
+**Features**
+- Send trade requests.
+- Accept or deny requests.
+- Exchange items through a GUI.
+- Exchange in-game currency.
+- Individual ready confirmation.
+- Complete transactions after both players confirm.
+- Configurable maximum trading distance.
+- Optional same-world requirement.
 - Request expiration and cooldown.
-- Optional cancellation when a player takes damage or disconnects.
+- Optional cancellation on damage or disconnect.
 
-Example:
-
-/trade PlayerName
+**Commands**
+```text
+/trade <player>
 /trade accept
 /trade deny
+```
 
----
+## Mailbox System
 
-Mailbox System
+A persistent delivery system for player items.
 
-The Mailbox system handles items that need to be delivered to players.
+**Features**
+- Store items awaiting delivery.
+- Automatically deliver stored items when players join.
+- Handle expired auction item returns.
+- Support trade recovery deliveries.
+- Preserve undelivered items.
 
-Features:
+## Trade Recovery
 
-- Persistent item storage.
-- Automatic delivery when players join.
-- Supports expired auction item returns.
-- Supports trade recovery deliveries.
-- Stores undelivered items for later delivery.
+Helps recover unfinished trades after server interruptions.
 
----
-
-Trade Recovery System
-
-VortexExchange includes persistent trade records to help recover unfinished transactions.
-
-Features:
-
-- Saves active trade information.
+**Features**
+- Persistent active trade records.
 - Stores both players' items and money.
-- Checks unfinished trades after server interruptions.
-- Returns stored items through the Mailbox.
+- Checks unfinished trades during recovery.
+- Returns stored items through Mailbox.
 - Uses database transactions during recovery.
 
----
+## Commands
 
-Language Support
+| Command | Description |
+|:--|:--|
+| `/ah` | Open Auction House |
+| `/ah sell <price>` | List the item in your hand |
+| `/trade <player>` | Send a trade request |
+| `/trade accept` | Accept a trade request |
+| `/trade deny` | Deny a trade request |
 
-VortexExchange currently supports two languages:
+## Permissions
 
-Language| Configuration
-Indonesian| "id"
-English| "en"
+| Permission | Default | Description |
+|:--|:--|:--|
+| `vortexexchange.use` | Everyone | Access Auction House and Trading |
+| `vortexexchange.admin` | OP | Administrative permission |
 
-Language selection is global and configured through "config.yml".
+## Requirements
 
-settings:
-  language: "en"
+| Requirement | Version |
+|:--|:--|
+| Minecraft | 26.3 |
+| Paper | 26.3 |
+| Purpur | 26.3 |
+| Java | 25 |
+| Vault | Compatible version |
+| Economy Plugin | Vault-compatible |
 
-Set the value to "id" to use Indonesian.
-
----
-
-Commands
-
-Command| Description
-"/ah"| Open the Auction House
-"/ah sell <price>"| Sell the item in your main hand
-"/trade <player>"| Send a trade request
-"/trade accept"| Accept a trade request
-"/trade deny"| Deny a trade request
-"/trade toggle"| Toggle incoming trade requests
-"/trade money"| Trade money using the trade system
-
-Command availability may depend on the installed plugin version.
-
----
-
-Permissions
-
-Permission| Default| Description
-"vortexexchange.use"| Everyone| Access Auction House and Trading
-"vortexexchange.admin"| OP| Administrative permission
-
----
-
-Requirements
-
-Requirement| Version| Required
-Minecraft Server| 26.3| Yes
-Paper| 26.3| Yes
-Purpur| 26.3| Yes
-Java| 25| Yes
-Vault| Compatible version| Yes
-Economy Plugin| Vault-compatible| Yes
-SQLite JDBC| Bundled| Yes
-
-Supported server software:
-
+**Supported server software**
 - Paper
 - Purpur
 
-VortexExchange targets the Paper 26.3 API. Compatibility with other server software or versions is not guaranteed.
+VortexExchange targets the Paper 26.3 API. Other versions and server software have not been verified.
 
----
+## Installation
 
-Installation
-
-1. Download the latest VortexExchange ".jar" release.
-2. Install Vault on your server.
+1. Download the latest VortexExchange JAR release.
+2. Install Vault.
 3. Install a Vault-compatible economy plugin.
-4. Place "VortexExchange.jar" inside your server's "plugins/" directory.
+4. Upload `VortexExchange.jar` into your server's `plugins` folder.
 5. Restart your server.
-6. Open "plugins/VortexExchange/config.yml".
-7. Adjust the settings to your preference.
-8. Start using "/ah" and "/trade".
+6. Open `plugins/VortexExchange/config.yml`.
+7. Configure the plugin.
+8. Start using `/ah` and `/trade`.
 
----
+## Configuration
 
-Configuration
+Configuration is generated automatically when the plugin starts for the first time.
 
-The plugin generates its configuration files automatically.
+**Example `config.yml`**
 
-Example "config.yml":
-
+```yaml
 settings:
   prefix: "&b&lVortexExchange &8»"
   language: "en"
@@ -221,54 +194,62 @@ trade:
   allow-items: true
   cancel-on-damage: true
   cancel-on-disconnect: true
+```
 
-Configuration values can be adjusted to suit your server's economy and trading rules.
+## Language Support
 
----
+VortexExchange supports two languages.
 
-Database
+| Language | Value |
+|:--|:--|
+| Indonesian | `id` |
+| English | `en` |
 
-VortexExchange uses SQLite for persistent data storage.
+Change the language globally in `config.yml`.
 
-Database-backed systems include:
+```yaml
+settings:
+  language: "en"
+```
 
+## Database
+
+VortexExchange uses SQLite for persistent storage.
+
+Stored information includes:
 - Auction listings.
 - Active trade records.
 - Mailbox deliveries.
 - Trade recovery information.
 
----
+## Support
 
-Support & Community
+Need help with installation, configuration or troubleshooting?
 
-Need help with installation, configuration, or troubleshooting?
+Join our official Discord community.
 
-Join the official VortexTeam Discord community.
+<p align="center">
+  <a href="https://discord.gg/CjvTjVVXK">
+    <img src="https://img.shields.io/badge/DISCORD-JOIN%20VORTEXTEAM-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
+  </a>
+</p>
 
-<div align="center">VortexTeam Community
+## License
 
-"JOIN OUR DISCORD" (https://discord.gg/CjvTjVVXK)
+VortexExchange is protected by the **VortexExchange Proprietary License**.
 
-https://discord.gg/CjvTjVVXK
+All rights are reserved by VortexTeam.
 
-</div>---
+Unauthorized copying, modification, redistribution, reuploading or commercial use is prohibited without prior written permission.
 
-License
-
-VortexExchange is distributed under the VortexExchange Proprietary License — All Rights Reserved.
-
-Viewing this public repository does not grant permission to copy, modify, redistribute, reupload, or commercially exploit the software without prior written authorization from VortexTeam.
-
-See "LICENSE" (LICENSE) for the complete terms.
+See [LICENSE](LICENSE) for complete terms.
 
 ---
 
-<div align="center">VortexExchange
-
-Built for Minecraft Trading.
-
-Developed by VortexTeam
-
-© 2026 VortexTeam. All Rights Reserved.
-
-</div>
+<p align="center">
+  <strong>VortexExchange</strong>
+  <br />
+  Developed by <strong>VortexTeam</strong>
+  <br />
+  © 2026 VortexTeam. All Rights Reserved.
+</p>
