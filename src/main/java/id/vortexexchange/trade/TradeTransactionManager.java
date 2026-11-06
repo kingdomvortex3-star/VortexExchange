@@ -2,7 +2,9 @@
 package id.vortexexchange.trade;
 
 import id.vortexexchange.VortexExchange;
+import id.vortexexchange.database.MailboxManager;
 import id.vortexexchange.economy.EconomyManager;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -15,6 +17,7 @@ public class TradeTransactionManager {
     private final VortexExchange plugin;
     private final EconomyManager economy;
     private final TradeManager tradeManager;
+    private final MailboxManager mailboxManager;
 
     public TradeTransactionManager(
             VortexExchange plugin,
@@ -24,6 +27,11 @@ public class TradeTransactionManager {
         this.plugin = plugin;
         this.economy = economy;
         this.tradeManager = tradeManager;
+        this.mailboxManager = plugin.getMailboxManager();
+    }
+
+    private LanguageManager lang() {
+        return plugin.getLanguageManager();
     }
 
     public synchronized boolean complete(TradeSession session) {
@@ -41,11 +49,11 @@ public class TradeTransactionManager {
 
         if (one == null || two == null
                 || !one.isOnline() || !two.isOnline()) {
-            return fail(session, "Salah satu pemain offline.");
+            return fail(session, "trade.player-offline");
         }
 
         if (!economy.isAvailable()) {
-            return fail(session, "Ekonomi Vault tidak tersedia.");
+            return fail(session, "economy.missing");
         }
 
         double oneMoney = session.getMoney(oneId);
@@ -55,39 +63,35 @@ public class TradeTransactionManager {
                 || !Double.isFinite(twoMoney)
                 || oneMoney < 0
                 || twoMoney < 0) {
-            return fail(session, "Penawaran uang tidak valid.");
+            return fail(session, "trade.invalid-money");
         }
 
         List<ItemStack> oneItems = session.getItems(oneId);
         List<ItemStack> twoItems = session.getItems(twoId);
 
         if (!validateItems(oneItems) || !validateItems(twoItems)) {
-            return fail(session, "Data barang trade tidak valid.");
+            return fail(session, "trade.invalid-items");
         }
 
         if (!economy.has(one, oneMoney)
                 || !economy.has(two, twoMoney)) {
-            return fail(session, "Saldo salah satu pemain tidak cukup.");
+            return fail(session, "trade.insufficient-money");
         }
 
+        // Withdraw both offers first.
         if (!withdraw(one, oneMoney)) {
-            return fail(session, "Gagal mengambil uang pemain pertama.");
+            return fail(session, "trade.payment-failed");
         }
 
         if (!withdraw(two, twoMoney)) {
-            boolean refunded = refund(one, oneMoney);
-
-            if (!refunded) {
-                logRecovery(
-                        oneId,
-                        oneMoney,
-                        "Refund pemain pertama setelah penarikan kedua gagal."
-                );
+            if (!refund(one, oneMoney)) {
+                logRecovery(oneId, oneMoney, "Refund pertama gagal.");
             }
 
-            return fail(session, "Gagal mengambil uang pemain kedua.");
+            return fail(session, "trade.payment-failed");
         }
 
+        // Deposit the first payment.
         if (!deposit(one, twoMoney)) {
             boolean refundOne = refund(one, oneMoney);
             boolean refundTwo = refund(two, twoMoney);
@@ -98,40 +102,55 @@ public class TradeTransactionManager {
                     refundOne, refundTwo
             );
 
-            return fail(session, "Pembayaran pemain pertama gagal.");
+            return fail(session, "trade.payment-failed");
         }
 
+        // Deposit the second payment.
         if (!deposit(two, oneMoney)) {
-            rollbackSecondPayment(
-                    one, two,
+            // Reverse the first deposit before refunding withdrawals.
+            boolean reversePayment = withdraw(one, twoMoney);
+
+            if (!reversePayment) {
+                logRecovery(
+                        oneId,
+                        twoMoney,
+                        "Gagal membatalkan pembayaran pertama."
+                );
+
+                plugin.getLogger().severe(
+                        "Rollback tidak aman. Refund manual diperlukan."
+                );
+
+                return fail(session, "trade.rollback-failed");
+            }
+
+            boolean refundOne = refund(one, oneMoney);
+            boolean refundTwo = refund(two, twoMoney);
+
+            logRefundFailures(
                     oneId, twoId,
-                    oneMoney, twoMoney
+                    oneMoney, twoMoney,
+                    refundOne, refundTwo
             );
 
-            return fail(
-                    session,
-                    "Pembayaran kedua gagal. Hubungi admin jika saldo bermasalah."
-            );
+            return fail(session, "trade.payment-failed");
         }
 
-        boolean firstDelivery = deliverItems(one, twoItems);
-        boolean secondDelivery = deliverItems(two, oneItems);
+        // Deliver items. Overflow is stored in the recipient's mailbox.
+        boolean firstDelivery = deliverItems(twoId, one, twoItems);
+        boolean secondDelivery = deliverItems(oneId, two, oneItems);
 
         if (!firstDelivery || !secondDelivery) {
             plugin.getLogger().severe(
-                    "TRADE ITEM DELIVERY ERROR! "
+                    "TRADE DELIVERY ERROR! "
                             + "PlayerOne=" + oneId
                             + ", PlayerTwo=" + twoId
             );
 
-            one.sendMessage(
-                    "§cPengiriman item bermasalah. Hubungi admin."
-            );
+            one.sendMessage(lang().get("trade.delivery-error"));
+            two.sendMessage(lang().get("trade.delivery-error"));
 
-            two.sendMessage(
-                    "§cPengiriman item bermasalah. Hubungi admin."
-            );
-
+            // Keep the session stored for administrator investigation.
             return false;
         }
 
@@ -139,21 +158,23 @@ public class TradeTransactionManager {
 
         if (!tradeManager.deleteStoredSession(session)) {
             plugin.getLogger().severe(
-                    "GAGAL MENGHAPUS DATA TRADE SELESAI DARI DATABASE! "
+                    "GAGAL MENGHAPUS DATA TRADE SELESAI: "
                             + oneId + " <-> " + twoId
             );
         }
 
-        one.sendMessage("§a§lTRADE BERHASIL!");
-        two.sendMessage("§a§lTRADE BERHASIL!");
+        one.sendMessage(lang().get("trade.completed"));
+        two.sendMessage(lang().get("trade.completed"));
 
-        one.sendMessage(
-                "§7Transaksi dengan §b" + two.getName() + " §7selesai."
-        );
+        one.sendMessage(lang().get(
+                "trade.completed-with",
+                "player", two.getName()
+        ));
 
-        two.sendMessage(
-                "§7Transaksi dengan §b" + one.getName() + " §7selesai."
-        );
+        two.sendMessage(lang().get(
+                "trade.completed-with",
+                "player", one.getName()
+        ));
 
         one.closeInventory();
         two.closeInventory();
@@ -163,38 +184,6 @@ public class TradeTransactionManager {
         );
 
         return true;
-    }
-
-    private void rollbackSecondPayment(
-            Player one,
-            Player two,
-            UUID oneId,
-            UUID twoId,
-            double oneMoney,
-            double twoMoney
-    ) {
-        boolean reverseWithdraw = withdraw(one, twoMoney);
-        boolean reverseDeposit = false;
-
-        if (reverseWithdraw) {
-            reverseDeposit = deposit(two, twoMoney);
-        }
-
-        boolean refundOne = refund(one, oneMoney);
-        boolean refundTwo = refund(two, twoMoney);
-
-        logRefundFailures(
-                oneId, twoId,
-                oneMoney, twoMoney,
-                refundOne, refundTwo
-        );
-
-        if (!reverseWithdraw || !reverseDeposit) {
-            plugin.getLogger().severe(
-                    "ROLLBACK TRADE TIDAK SEPENUHNYA BERHASIL! "
-                            + "Perlu pemeriksaan saldo manual."
-            );
-        }
     }
 
     private boolean validateItems(List<ItemStack> items) {
@@ -226,6 +215,7 @@ public class TradeTransactionManager {
     }
 
     private boolean deliverItems(
+            UUID owner,
             Player receiver,
             List<ItemStack> items
     ) {
@@ -240,10 +230,13 @@ public class TradeTransactionManager {
                 );
 
                 for (ItemStack leftover : leftovers.values()) {
-                    receiver.getWorld().dropItemNaturally(
-                            receiver.getLocation(),
-                            leftover
-                    );
+                    if (!mailboxManager.store(owner, leftover.clone())) {
+                        plugin.getLogger().severe(
+                                "GAGAL MENYIMPAN SISA ITEM TRADE KE MAILBOX: "
+                                        + owner
+                        );
+                        return false;
+                    }
                 }
             }
 
@@ -285,16 +278,16 @@ public class TradeTransactionManager {
         }
     }
 
-    private boolean fail(TradeSession session, String reason) {
+    private boolean fail(TradeSession session, String key) {
         Player one = Bukkit.getPlayer(session.getPlayerOne());
         Player two = Bukkit.getPlayer(session.getPlayerTwo());
 
         if (one != null) {
-            one.sendMessage("§cTrade gagal: " + reason);
+            one.sendMessage(lang().get(key));
         }
 
         if (two != null) {
-            two.sendMessage("§cTrade gagal: " + reason);
+            two.sendMessage(lang().get(key));
         }
 
         return false;
