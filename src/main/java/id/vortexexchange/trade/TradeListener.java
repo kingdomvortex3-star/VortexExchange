@@ -16,7 +16,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
@@ -143,7 +143,6 @@ public class TradeListener implements Listener {
 
         event.setCurrentItem(null);
         refresh(session);
-
         player.sendMessage(lang().get("trade.item-added"));
     }
 
@@ -197,17 +196,17 @@ public class TradeListener implements Listener {
         session.toggleReady(uuid);
 
         if (session.areBothReady()) {
-            notifyPlayers(session, "trade.both-ready");
+            notifyKey(session, "trade.both-ready");
             transactionManager.complete(session);
         } else if (session.isReady(uuid)) {
-            notifyPlayers(
+            notifyKey(
                     session,
                     "trade.player-ready",
                     "player",
                     player.getName()
             );
         } else {
-            notifyPlayers(
+            notifyKey(
                     session,
                     "trade.player-unready",
                     "player",
@@ -243,14 +242,14 @@ public class TradeListener implements Listener {
 
         if (!tradeManager.deleteStoredSession(session)) {
             plugin.getLogger().severe(
-                    "GAGAL MENGHAPUS DATA TRADE DARI DATABASE: "
+                    "FAILED TO DELETE TRADE DATA FROM DATABASE: "
                             + session.getPlayerOne()
                             + " <-> "
                             + session.getPlayerTwo()
             );
         }
 
-        notifyPlayers(session, message);
+        notifyMessage(session, message);
 
         closePlayer(session.getPlayerOne());
         closePlayer(session.getPlayerTwo());
@@ -270,7 +269,7 @@ public class TradeListener implements Listener {
             if (player == null || !player.isOnline()) {
                 if (!mailboxManager.store(uuid, item.clone())) {
                     plugin.getLogger().severe(
-                            "GAGAL MENYIMPAN ITEM TRADE KE MAILBOX: " + uuid
+                            "FAILED TO STORE TRADE ITEM IN MAILBOX: " + uuid
                     );
                 }
                 continue;
@@ -281,7 +280,7 @@ public class TradeListener implements Listener {
             for (ItemStack leftover : leftovers.values()) {
                 if (!mailboxManager.store(uuid, leftover.clone())) {
                     plugin.getLogger().severe(
-                            "GAGAL MENYIMPAN SISA ITEM KE MAILBOX: " + uuid
+                            "FAILED TO STORE LEFTOVER ITEM IN MAILBOX: " + uuid
                     );
                 }
             }
@@ -317,23 +316,22 @@ public class TradeListener implements Listener {
         );
     }
 
-    private void notifyPlayers(
+    private void notifyKey(
             TradeSession session,
             String key
     ) {
-        String message = lang().get(key);
-        notifyPlayers(session, message);
+        notifyMessage(session, lang().get(key));
     }
 
-    private void notifyPlayers(
+    private void notifyKey(
             TradeSession session,
             String key,
             String... replacements
     ) {
-        notifyPlayers(session, lang().get(key, replacements));
+        notifyMessage(session, lang().get(key, replacements));
     }
 
-    private void notifyPlayers(
+    private void notifyMessage(
             TradeSession session,
             String message
     ) {
