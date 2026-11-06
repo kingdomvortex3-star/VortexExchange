@@ -5,6 +5,8 @@ import id.vortexexchange.VortexExchange;
 import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.util.LanguageManager;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -43,6 +45,7 @@ public class AuctionListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
@@ -67,38 +70,91 @@ public class AuctionListener implements Listener {
             return;
         }
 
-        Integer listingId = gui.getListingId(slot);
-
-        if (listingId == null) {
-            return;
-        }
-
         if (event.getClick().isShiftClick()
                 || event.getClick().isKeyboardClick()
                 || event.getClick().isCreativeAction()) {
             return;
         }
 
+        if (slot == 45) {
+            changePage(player, gui, -1);
+            return;
+        }
+
+        if (slot == 53) {
+            changePage(player, gui, 1);
+            return;
+        }
+
+        Integer listingId = gui.getListingId(slot);
+
+        if (listingId == null) {
+            return;
+        }
+
         purchase(player, listingId);
+    }
+
+    private void changePage(
+            Player player,
+            AuctionGUI currentGUI,
+            int direction
+    ) {
+
+        int newPage = currentGUI.getPage() + direction;
+
+        if (newPage < 0
+                || newPage >= currentGUI.getTotalPages()) {
+            return;
+        }
+
+        try {
+
+            var listings = auctionManager.getListings();
+
+            AuctionGUI newGUI = new AuctionGUI(
+                    listings,
+                    newPage
+            );
+
+            player.openInventory(newGUI.getInventory());
+
+        } catch (SQLException exception) {
+
+            plugin.getLogger().severe(
+                    "Gagal memuat halaman Auction House: "
+                            + exception.getMessage()
+            );
+
+            player.sendMessage(
+                    ChatColor.RED
+                            + "Gagal memuat halaman Auction House."
+            );
+        }
     }
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
+
         if (event.getView().getTopInventory().getHolder()
                 instanceof AuctionGUI) {
+
             event.setCancelled(true);
         }
     }
 
     private void purchase(Player buyer, int listingId) {
+
         if (!processing.add(listingId)) {
             buyer.sendMessage(lang().get("auction.processing"));
             return;
         }
 
         try {
+
             if (!plugin.getConfig().getBoolean(
                     "auction.enabled", true)) {
+
                 buyer.sendMessage(lang().get("auction.disabled"));
                 return;
             }
@@ -133,11 +189,13 @@ public class AuctionListener implements Listener {
 
             if (item == null || item.getType().isAir()
                     || item.getAmount() <= 0) {
+
                 buyer.sendMessage(lang().get("auction.invalid-item"));
 
                 plugin.getLogger().severe(
                         "Item listing tidak valid. ID: " + listingId
                 );
+
                 return;
             }
 
@@ -164,8 +222,11 @@ public class AuctionListener implements Listener {
             boolean deleted;
 
             try {
+
                 deleted = auctionManager.deleteListing(listingId);
+
             } catch (SQLException exception) {
+
                 refundBuyer(
                         buyer,
                         listingId,
@@ -174,11 +235,15 @@ public class AuctionListener implements Listener {
                                 + exception.getMessage()
                 );
 
-                buyer.sendMessage(lang().get("auction.transaction-error"));
+                buyer.sendMessage(
+                        lang().get("auction.transaction-error")
+                );
+
                 return;
             }
 
             if (!deleted) {
+
                 refundBuyer(
                         buyer,
                         listingId,
@@ -191,8 +256,13 @@ public class AuctionListener implements Listener {
             }
 
             if (!economyManager.deposit(seller, price)) {
+
                 boolean restored = restoreListing(listing);
-                boolean refunded = economyManager.deposit(buyer, price);
+
+                boolean refunded = economyManager.deposit(
+                        buyer,
+                        price
+                );
 
                 logRecovery(
                         listingId,
@@ -203,11 +273,15 @@ public class AuctionListener implements Listener {
                                 + ", buyer refunded=" + refunded
                 );
 
-                buyer.sendMessage(lang().get("auction.transaction-error"));
+                buyer.sendMessage(
+                        lang().get("auction.transaction-error")
+                );
+
                 return;
             }
 
             try {
+
                 ItemStack purchasedItem = item.clone();
 
                 var leftovers = buyer.getInventory().addItem(
@@ -222,6 +296,7 @@ public class AuctionListener implements Listener {
                 );
 
             } catch (RuntimeException exception) {
+
                 logRecovery(
                         listingId,
                         buyer.getUniqueId(),
@@ -230,7 +305,10 @@ public class AuctionListener implements Listener {
                                 + exception.getMessage()
                 );
 
-                buyer.sendMessage(lang().get("auction.delivery-error"));
+                buyer.sendMessage(
+                        lang().get("auction.delivery-error")
+                );
+
                 return;
             }
 
@@ -245,6 +323,7 @@ public class AuctionListener implements Listener {
             Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
             if (onlineSeller != null && onlineSeller.isOnline()) {
+
                 onlineSeller.sendMessage(
                         lang().get(
                                 "auction.sold",
@@ -265,6 +344,7 @@ public class AuctionListener implements Listener {
             buyer.closeInventory();
 
         } catch (SQLException exception) {
+
             buyer.sendMessage(lang().get("auction.database-error"));
 
             plugin.getLogger().severe(
@@ -272,6 +352,7 @@ public class AuctionListener implements Listener {
             );
 
         } catch (RuntimeException exception) {
+
             buyer.sendMessage(lang().get("auction.general-error"));
 
             plugin.getLogger().severe(
@@ -279,6 +360,7 @@ public class AuctionListener implements Listener {
             );
 
         } finally {
+
             processing.remove(listingId);
         }
     }
@@ -289,9 +371,11 @@ public class AuctionListener implements Listener {
             double amount,
             String reason
     ) {
+
         boolean refunded = economyManager.deposit(buyer, amount);
 
         if (!refunded) {
+
             logRecovery(
                     listingId,
                     buyer.getUniqueId(),
@@ -302,7 +386,9 @@ public class AuctionListener implements Listener {
     }
 
     private boolean restoreListing(AuctionListing listing) {
+
         try {
+
             long remaining = listing.getExpiresAt()
                     - System.currentTimeMillis();
 
@@ -321,6 +407,7 @@ public class AuctionListener implements Listener {
             return true;
 
         } catch (Exception exception) {
+
             plugin.getLogger().severe(
                     "Gagal memulihkan listing: "
                             + exception.getMessage()
@@ -336,6 +423,7 @@ public class AuctionListener implements Listener {
             double amount,
             String reason
     ) {
+
         plugin.getLogger().severe(
                 "AUCTION TRANSACTION MEMERLUKAN PEMERIKSAAN ADMIN! "
                         + "Listing=" + listingId
