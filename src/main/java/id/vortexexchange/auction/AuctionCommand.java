@@ -28,6 +28,10 @@ public class AuctionCommand implements CommandExecutor {
         this.auctionManager = auctionManager;
     }
 
+    private LanguageManager lang() {
+        return plugin.getLanguageManager();
+    }
+
     @Override
     public boolean onCommand(
             CommandSender sender,
@@ -35,20 +39,18 @@ public class AuctionCommand implements CommandExecutor {
             String label,
             String[] args
     ) {
-        LanguageManager lang = plugin.getLanguageManager();
-
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be used by players.");
+            sender.sendMessage(lang().get("player.only"));
             return true;
         }
 
         if (!player.hasPermission("vortexexchange.use")) {
-            player.sendMessage(lang.get("permission.denied"));
+            player.sendMessage(lang().get("permission.denied"));
             return true;
         }
 
         if (!plugin.getConfig().getBoolean("auction.enabled", true)) {
-            player.sendMessage(color("&cAuction House sedang dinonaktifkan."));
+            player.sendMessage(lang().get("auction.disabled"));
             return true;
         }
 
@@ -62,31 +64,30 @@ public class AuctionCommand implements CommandExecutor {
             return true;
         }
 
-        player.sendMessage(color("&cGunakan: /ah atau /ah sell <harga>"));
+        player.sendMessage(lang().get("auction.usage"));
         return true;
     }
 
     private void openAuction(Player player) {
         try {
-            List<AuctionListing> listings =
-                    auctionManager.getListings();
+            List<AuctionListing> listings = auctionManager.getListings();
 
             AuctionGUI gui = new AuctionGUI(listings);
             player.openInventory(gui.getInventory());
 
         } catch (SQLException exception) {
-            player.sendMessage(color("&cGagal membuka Auction House."));
+            player.sendMessage(lang().get("auction.database-error"));
+
             plugin.getLogger().severe(
-                    "Gagal mengambil listing: " + exception.getMessage()
+                    "Failed to load auction listings: "
+                            + exception.getMessage()
             );
         }
     }
 
     private void sellItem(Player player, String[] args) {
-        LanguageManager lang = plugin.getLanguageManager();
-
         if (args.length != 2) {
-            player.sendMessage(color("&cGunakan: /ah sell <harga>"));
+            player.sendMessage(lang().get("auction.usage"));
             return;
         }
 
@@ -95,12 +96,12 @@ public class AuctionCommand implements CommandExecutor {
         try {
             price = Double.parseDouble(args[1]);
         } catch (NumberFormatException exception) {
-            player.sendMessage(color("&cHarga harus berupa angka."));
+            player.sendMessage(lang().get("auction.invalid-price"));
             return;
         }
 
         if (!Double.isFinite(price) || price <= 0) {
-            player.sendMessage(color("&cHarga harus lebih dari 0."));
+            player.sendMessage(lang().get("auction.invalid-price"));
             return;
         }
 
@@ -114,8 +115,11 @@ public class AuctionCommand implements CommandExecutor {
 
         if (price < minimum) {
             player.sendMessage(
-                    lang.get("auction.minimum", "price",
-                            String.valueOf(minimum))
+                    lang().get(
+                            "auction.minimum",
+                            "price",
+                            String.valueOf(minimum)
+                    )
             );
             return;
         }
@@ -123,7 +127,7 @@ public class AuctionCommand implements CommandExecutor {
         ItemStack hand = player.getInventory().getItemInMainHand();
 
         if (hand == null || hand.getType() == Material.AIR) {
-            player.sendMessage(color("&cPegang barang yang ingin dijual."));
+            player.sendMessage(lang().get("auction.hold-item"));
             return;
         }
 
@@ -131,9 +135,7 @@ public class AuctionCommand implements CommandExecutor {
                 "auction.max-listings-per-player", 10
         );
 
-        if (maximumListings < 1) {
-            maximumListings = 1;
-        }
+        maximumListings = Math.max(1, maximumListings);
 
         try {
             if (!player.hasPermission("vortexexchange.admin")) {
@@ -143,8 +145,11 @@ public class AuctionCommand implements CommandExecutor {
 
                 if (currentListings >= maximumListings) {
                     player.sendMessage(
-                            lang.get("auction.limit")
-                                    + color(" &7(" + maximumListings + ")")
+                            lang().get(
+                                    "auction.limit",
+                                    "limit",
+                                    String.valueOf(maximumListings)
+                            )
                     );
                     return;
                 }
@@ -154,9 +159,8 @@ public class AuctionCommand implements CommandExecutor {
                     "auction.listing-duration-hours", 168
             );
 
-            if (duration <= 0
-                    || duration > Long.MAX_VALUE / 3600000L) {
-                player.sendMessage(color("&cDurasi listing tidak valid."));
+            if (duration <= 0 || duration > Long.MAX_VALUE / 3600000L) {
+                player.sendMessage(lang().get("auction.duration-invalid"));
                 return;
             }
 
@@ -172,28 +176,37 @@ public class AuctionCommand implements CommandExecutor {
 
             player.getInventory().setItemInMainHand(null);
 
-            player.sendMessage(lang.get("auction.success"));
+            player.sendMessage(lang().get("auction.success"));
             player.sendMessage(
-                    lang.get("auction.price", "price", String.valueOf(price))
+                    lang().get(
+                            "auction.price",
+                            "price",
+                            String.valueOf(price)
+                    )
             );
 
             int activeListings = auctionManager.getPlayerListingCount(
                     player.getUniqueId()
             );
 
-            player.sendMessage(color(
-                    "&7Listing aktif: &b"
-                            + activeListings
-                            + "/" + maximumListings
-            ));
+            player.sendMessage(
+                    lang().get(
+                            "auction.listing-count",
+                            "current",
+                            String.valueOf(activeListings),
+                            "maximum",
+                            String.valueOf(maximumListings)
+                    )
+            );
 
             broadcastListing(player, item, price);
 
         } catch (SQLException | RuntimeException exception) {
-            player.sendMessage(lang.get("auction.failed"));
+            player.sendMessage(lang().get("auction.failed"));
 
             plugin.getLogger().severe(
-                    "Gagal membuat listing: " + exception.getMessage()
+                    "Failed to create auction listing: "
+                            + exception.getMessage()
             );
         }
     }
@@ -203,8 +216,6 @@ public class AuctionCommand implements CommandExecutor {
             ItemStack item,
             double price
     ) {
-        LanguageManager lang = plugin.getLanguageManager();
-
         String itemName = item.getType().name()
                 .toLowerCase()
                 .replace('_', ' ');
@@ -212,25 +223,25 @@ public class AuctionCommand implements CommandExecutor {
         String announcement =
                 "&8&m--------------------------------\n"
                 + "&b&lVortexExchange &8» "
-                + lang.get("auction.new") + "\n"
-                + lang.get(
+                + lang().get("auction.new") + "\n"
+                + lang().get(
                         "auction.seller",
                         "player",
                         seller.getName()
                 ) + "\n"
-                + lang.get(
+                + lang().get(
                         "auction.item",
                         "amount",
                         String.valueOf(item.getAmount()),
                         "item",
                         itemName
                 ) + "\n"
-                + lang.get(
+                + lang().get(
                         "auction.price",
                         "price",
                         String.valueOf(price)
                 ) + "\n"
-                + lang.get("auction.view") + "\n"
+                + lang().get("auction.view") + "\n"
                 + "&8&m--------------------------------";
 
         Bukkit.broadcastMessage(color(announcement));
