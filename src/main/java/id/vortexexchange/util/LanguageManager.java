@@ -21,10 +21,13 @@ public class LanguageManager {
     private void loadLanguages() {
 
         // INDONESIAN
+
         indonesia.put("permission.denied", "&cKamu tidak memiliki izin.");
         indonesia.put("player.only", "&cPerintah ini hanya untuk pemain.");
         indonesia.put("player.not-found", "&cPemain tidak ditemukan.");
         indonesia.put("economy.missing", "&cVault atau plugin ekonomi tidak ditemukan.");
+
+        // AUCTION HOUSE
 
         indonesia.put("auction.disabled", "&cAuction House sedang dinonaktifkan.");
         indonesia.put("auction.success", "&aBarang berhasil dipasang di Auction House!");
@@ -56,6 +59,9 @@ public class LanguageManager {
         indonesia.put("auction.usage", "&cGunakan: /ah atau /ah sell <harga>");
         indonesia.put("auction.hold-item", "&cPegang barang yang ingin dijual.");
         indonesia.put("auction.duration-invalid", "&cDurasi listing tidak valid.");
+        indonesia.put("auction.listing-count", "&7Listing aktif: &b{current}&7/&b{maximum}");
+
+        // PLAYER TRADE
 
         indonesia.put("trade.disabled", "&cPlayer Trade sedang dinonaktifkan.");
         indonesia.put("trade.usage", "&cGunakan perintah trade dengan benar.");
@@ -94,16 +100,40 @@ public class LanguageManager {
         indonesia.put("trade.help-toggle", "&7/trade toggle &8- &fAktif/nonaktif permintaan");
         indonesia.put("trade.help-money", "&7/trade money <jumlah> &8- &fTawarkan uang");
 
+        indonesia.put("trade.cancelled", "&cTrade dibatalkan.");
+        indonesia.put("trade.items-disabled", "&cPenawaran barang sedang dinonaktifkan.");
+        indonesia.put("trade.slots-full", "&cSlot penawaran barang sudah penuh.");
+        indonesia.put("trade.item-add-failed", "&cGagal menambahkan barang ke penawaran.");
+        indonesia.put("trade.item-save-failed", "&cGagal menyimpan penawaran barang. Perubahan dibatalkan.");
+        indonesia.put("trade.item-added", "&aBarang berhasil ditambahkan ke penawaran.");
+        indonesia.put("trade.both-ready", "&aKedua pemain siap. Memproses trade...");
+        indonesia.put("trade.player-ready", "&a{player} sudah siap.");
+        indonesia.put("trade.player-unready", "&e{player} membatalkan status siap.");
+        indonesia.put("trade.gui-closed", "&cTrade dibatalkan karena GUI ditutup.");
+        indonesia.put("trade.disconnected", "&cTrade dibatalkan karena pemain terputus.");
+        indonesia.put("trade.player-offline", "&cSalah satu pemain sedang offline.");
+        indonesia.put("trade.invalid-items", "&cData barang trade tidak valid.");
+        indonesia.put("trade.payment-failed", "&cPembayaran trade gagal.");
+        indonesia.put("trade.rollback-failed", "&cPengembalian uang gagal. Hubungi admin.");
+        indonesia.put("trade.delivery-error", "&cPengiriman barang trade bermasalah. Hubungi admin.");
+        indonesia.put("trade.completed", "&aTrade berhasil diselesaikan!");
+        indonesia.put("trade.completed-with", "&aTrade dengan &f{player} &aberhasil diselesaikan!");
+
+        // MAILBOX
+
         indonesia.put("mailbox.remaining", "&eKamu masih memiliki &b{count} &ebarang di Mailbox!");
         indonesia.put("mailbox.empty-inventory", "&7Kosongkan inventory untuk menerima semua barang.");
         indonesia.put("mailbox.error", "&cMailbox gagal diperiksa. Hubungi admin.");
         indonesia.put("mailbox.delivered", "&aMailbox: &f{count} &aitem berhasil diterima.");
 
         // ENGLISH
+
         english.put("permission.denied", "&cYou do not have permission.");
         english.put("player.only", "&cThis command can only be used by players.");
         english.put("player.not-found", "&cPlayer not found.");
         english.put("economy.missing", "&cVault or an economy plugin was not found.");
+
+        // AUCTION HOUSE
 
         english.put("auction.disabled", "&cAuction House is disabled.");
         english.put("auction.success", "&aYour item has been listed on the Auction House!");
@@ -135,6 +165,9 @@ public class LanguageManager {
         english.put("auction.usage", "&cUsage: /ah or /ah sell <price>");
         english.put("auction.hold-item", "&cHold the item you want to sell.");
         english.put("auction.duration-invalid", "&cInvalid listing duration.");
+        english.put("auction.listing-count", "&7Active listings: &b{current}&7/&b{maximum}");
+
+        // PLAYER TRADE
 
         english.put("trade.disabled", "&cPlayer Trading is disabled.");
         english.put("trade.usage", "&cPlease use the trade command correctly.");
@@ -172,6 +205,27 @@ public class LanguageManager {
         english.put("trade.help-deny", "&7/trade deny &8- &fDecline a request");
         english.put("trade.help-toggle", "&7/trade toggle &8- &fEnable/disable requests");
         english.put("trade.help-money", "&7/trade money <amount> &8- &fOffer money");
+
+        english.put("trade.cancelled", "&cTrade cancelled.");
+        english.put("trade.items-disabled", "&cItem offers are disabled.");
+        english.put("trade.slots-full", "&cItem offer slots are full.");
+        english.put("trade.item-add-failed", "&cFailed to add item to the offer.");
+        english.put("trade.item-save-failed", "&cFailed to save item offer. Changes reverted.");
+        english.put("trade.item-added", "&aItem added to the offer.");
+        english.put("trade.both-ready", "&aBoth players are ready. Processing trade...");
+        english.put("trade.player-ready", "&a{player} is ready.");
+        english.put("trade.player-unready", "&e{player} is no longer ready.");
+        english.put("trade.gui-closed", "&cTrade cancelled because the GUI was closed.");
+        english.put("trade.disconnected", "&cTrade cancelled because a player disconnected.");
+        english.put("trade.player-offline", "&cOne of the players is offline.");
+        english.put("trade.invalid-items", "&cTrade item data is invalid.");
+        english.put("trade.payment-failed", "&cTrade payment failed.");
+        english.put("trade.rollback-failed", "&cMoney rollback failed. Contact an administrator.");
+        english.put("trade.delivery-error", "&cTrade item delivery failed. Contact an administrator.");
+        english.put("trade.completed", "&aTrade completed successfully!");
+        english.put("trade.completed-with", "&aTrade with &f{player} &acompleted successfully!");
+
+        // MAILBOX
 
         english.put("mailbox.remaining", "&eYou still have &b{count} &eitems in your Mailbox!");
         english.put("mailbox.empty-inventory", "&7Clear your inventory to receive all items.");
