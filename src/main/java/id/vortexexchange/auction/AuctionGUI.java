@@ -8,6 +8,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.ItemFlag;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -64,9 +65,7 @@ public class AuctionGUI implements InventoryHolder {
 
         this.totalPages = Math.max(
                 1,
-                (int) Math.ceil(
-                        (double) totalListings / ITEMS_PER_PAGE
-                )
+                (int) Math.ceil((double) totalListings / ITEMS_PER_PAGE)
         );
 
         this.page = Math.max(
@@ -77,49 +76,87 @@ public class AuctionGUI implements InventoryHolder {
         inventory = Bukkit.createInventory(
                 this,
                 54,
-                ChatColor.translateAlternateColorCodes(
-                        '&',
-                        "&0&lVortexExchange &8| &bAuction House"
-                )
+                color("&0&lVORTEX &8» &bAuction House")
         );
 
         fillBackground();
-
+        addHeader();
         displayListings(availableListings);
-
         addControls();
     }
 
     private void fillBackground() {
 
-        ItemStack glass = createItem(
-                Material.GRAY_STAINED_GLASS_PANE,
-                "&8"
+        ItemStack dark = createItem(
+                Material.BLACK_STAINED_GLASS_PANE,
+                "&0"
+        );
+
+        ItemStack blue = createItem(
+                Material.BLUE_STAINED_GLASS_PANE,
+                "&1"
+        );
+
+        ItemStack cyan = createItem(
+                Material.CYAN_STAINED_GLASS_PANE,
+                "&b"
         );
 
         for (int slot = 0; slot < 54; slot++) {
 
-            if (slot < 9
-                    || slot >= 45
-                    || slot % 9 == 0
-                    || slot % 9 == 8) {
+            if (slot < 9 || slot >= 45) {
+                inventory.setItem(slot, dark);
+            }
 
-                inventory.setItem(slot, glass);
+            if (slot % 9 == 0 || slot % 9 == 8) {
+                inventory.setItem(slot, blue);
             }
         }
+
+        inventory.setItem(0, cyan);
+        inventory.setItem(8, cyan);
+        inventory.setItem(45, blue);
+        inventory.setItem(49, cyan);
+        inventory.setItem(53, blue);
     }
 
-    private void displayListings(
-            List<AuctionListing> listings
-    ) {
+    private void addHeader() {
+
+        inventory.setItem(
+                4,
+                createItem(
+                        Material.NETHER_STAR,
+                        "&b&lVORTEXEXCHANGE",
+                        "&8Auction House &7• &bMarketplace",
+                        "",
+                        "&7Tempat jual beli antar pemain.",
+                        "&7Transaksi cepat dan mudah.",
+                        "",
+                        "&8&m---------------------------",
+                        "&fTotal listing &8» &b" + totalListings,
+                        "&fHalaman &8» &b" + (page + 1)
+                                + "&7/&b" + totalPages,
+                        "&8&m---------------------------",
+                        "",
+                        "&ePilih item untuk melihat pembelian."
+                )
+        );
+    }
+
+    private void displayListings(List<AuctionListing> listings) {
 
         if (listings == null || listings.isEmpty()) {
+
             inventory.setItem(
                     22,
                     createItem(
                             Material.BARRIER,
-                            "&cBelum ada barang dijual",
-                            "&7Auction House masih kosong."
+                            "&c&lMARKETPLACE KOSONG",
+                            "",
+                            "&7Belum ada pemain yang menjual item.",
+                            "&7Silakan cek kembali nanti.",
+                            "",
+                            "&8VortexExchange"
                     )
             );
 
@@ -140,21 +177,28 @@ public class AuctionGUI implements InventoryHolder {
             AuctionListing listing = listings.get(i);
 
             ItemStack display = listing.getItem().clone();
-
             ItemMeta meta = display.getItemMeta();
 
             if (meta != null) {
 
-                meta.setLore(List.of(
-                        color("&8&m--------------------"),
-                        color("&7Penjual: &f" + listing.getSellerName()),
-                        color("&7Harga: &a$" + PRICE_FORMAT.format(
-                                listing.getPrice()
-                        )),
-                        color("&7Listing ID: &b#" + listing.getId()),
-                        color("&8&m--------------------"),
-                        color("&eKlik untuk membeli")
-                ));
+                List<String> lore = new ArrayList<>();
+
+                lore.add(color("&8&m--------------------------"));
+                lore.add(color("&b&lSELLER INFORMATION"));
+                lore.add(color("&7Penjual &8» &f" + listing.getSellerName()));
+                lore.add(color(""));
+                lore.add(color("&a&lPRICE"));
+                lore.add(color("&f$" + PRICE_FORMAT.format(
+                        listing.getPrice()
+                )));
+                lore.add(color(""));
+                lore.add(color("&8Listing ID: &7#" + listing.getId()));
+                lore.add(color("&8&m--------------------------"));
+                lore.add(color("&e&lLEFT CLICK"));
+                lore.add(color("&7Klik untuk membeli item ini."));
+
+                meta.setLore(lore);
+                meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
 
                 display.setItemMeta(meta);
             }
@@ -162,7 +206,6 @@ public class AuctionGUI implements InventoryHolder {
             int slot = LISTING_SLOTS[displayIndex];
 
             inventory.setItem(slot, display);
-
             listingSlots.put(slot, listing.getId());
 
             displayIndex++;
@@ -171,29 +214,15 @@ public class AuctionGUI implements InventoryHolder {
 
     private void addControls() {
 
-        inventory.setItem(
-                4,
-                createItem(
-                        Material.NETHER_STAR,
-                        "&b&lVORTEX AUCTION HOUSE",
-                        "&7Tempat jual beli antar pemain.",
-                        "",
-                        "&7Listing tersedia: &b" + totalListings,
-                        "&7Halaman: &b" + (page + 1)
-                                + "&7/&b" + totalPages,
-                        "&8&m--------------------",
-                        "&ePilih barang untuk membeli."
-                )
-        );
-
         if (page > 0) {
 
             inventory.setItem(
                     45,
                     createItem(
                             Material.ARROW,
-                            "&e&lHalaman sebelumnya",
-                            "&7Kembali ke halaman &b" + page,
+                            "&b&lPREVIOUS PAGE",
+                            "",
+                            "&7Kembali ke halaman &f" + page,
                             "",
                             "&eKlik untuk kembali."
                     )
@@ -205,8 +234,8 @@ public class AuctionGUI implements InventoryHolder {
                     45,
                     createItem(
                             Material.GRAY_STAINED_GLASS_PANE,
-                            "&8Halaman pertama",
-                            "&7Tidak ada halaman sebelumnya."
+                            "&8FIRST PAGE",
+                            "&7Kamu berada di halaman pertama."
                     )
             );
         }
@@ -215,8 +244,11 @@ public class AuctionGUI implements InventoryHolder {
                 49,
                 createItem(
                         Material.BARRIER,
-                        "&cTutup Auction House",
-                        "&7Klik untuk menutup."
+                        "&c&lCLOSE MENU",
+                        "",
+                        "&7Tutup Auction House.",
+                        "",
+                        "&cKlik untuk keluar."
                 )
         );
 
@@ -226,8 +258,9 @@ public class AuctionGUI implements InventoryHolder {
                     53,
                     createItem(
                             Material.ARROW,
-                            "&e&lHalaman berikutnya",
-                            "&7Lanjut ke halaman &b" + (page + 2),
+                            "&b&lNEXT PAGE",
+                            "",
+                            "&7Lanjut ke halaman &f" + (page + 2),
                             "",
                             "&eKlik untuk melanjutkan."
                     )
@@ -239,8 +272,8 @@ public class AuctionGUI implements InventoryHolder {
                     53,
                     createItem(
                             Material.GRAY_STAINED_GLASS_PANE,
-                            "&8Halaman terakhir",
-                            "&7Tidak ada halaman berikutnya."
+                            "&8LAST PAGE",
+                            "&7Kamu berada di halaman terakhir."
                     )
             );
         }
@@ -253,7 +286,6 @@ public class AuctionGUI implements InventoryHolder {
     ) {
 
         ItemStack item = new ItemStack(material);
-
         ItemMeta meta = item.getItemMeta();
 
         if (meta != null) {
@@ -261,7 +293,6 @@ public class AuctionGUI implements InventoryHolder {
             meta.setDisplayName(color(name));
 
             if (lore != null && lore.length > 0) {
-
                 meta.setLore(
                         java.util.Arrays.stream(lore)
                                 .map(this::color)
@@ -269,6 +300,7 @@ public class AuctionGUI implements InventoryHolder {
                 );
             }
 
+            meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
             item.setItemMeta(meta);
         }
 
