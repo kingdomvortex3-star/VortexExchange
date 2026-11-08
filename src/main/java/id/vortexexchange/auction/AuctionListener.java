@@ -69,7 +69,7 @@ public class AuctionListener implements Listener {
 
         int slot = event.getRawSlot();
 
-        // Close menu
+        // Close Auction House
         if (slot == 49) {
             player.closeInventory();
             return;
@@ -78,8 +78,7 @@ public class AuctionListener implements Listener {
         // Prevent unsafe inventory interactions
         if (event.getClick().isShiftClick()
                 || event.getClick().isKeyboardClick()
-                || event.getClick().isCreativeAction()
-                || event.getClick().isDoubleClick()) {
+                || event.getClick().isCreativeAction()) {
             return;
         }
 
@@ -95,13 +94,14 @@ public class AuctionListener implements Listener {
             return;
         }
 
-        // Purchase listing
+        // Find listing
         Integer listingId = gui.getListingId(slot);
 
         if (listingId == null) {
             return;
         }
 
+        // Purchase listing
         purchase(player, listingId);
     }
 
@@ -129,16 +129,16 @@ public class AuctionListener implements Listener {
 
         try {
 
-            // Reload listings from database
+            // Reload active listings
             var listings = auctionManager.getListings();
 
-            // Create requested page
+            // Create new page
             AuctionGUI newGUI = new AuctionGUI(
                     listings,
                     newPage
             );
 
-            // Open inventory on next server tick
+            // Open GUI on next server tick
             Bukkit.getScheduler().runTask(plugin, () -> {
 
                 if (!player.isOnline()) {
