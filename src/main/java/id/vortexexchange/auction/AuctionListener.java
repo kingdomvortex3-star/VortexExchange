@@ -4,9 +4,9 @@ package id.vortexexchange.auction;
 import id.vortexexchange.VortexExchange;
 import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.util.LanguageManager;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -43,6 +43,10 @@ public class AuctionListener implements Listener {
         return plugin.getLanguageManager();
     }
 
+    // ==========================================
+    // INVENTORY CLICK
+    // ==========================================
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
 
@@ -65,27 +69,33 @@ public class AuctionListener implements Listener {
 
         int slot = event.getRawSlot();
 
+        // Close menu
         if (slot == 49) {
             player.closeInventory();
             return;
         }
 
+        // Prevent unsafe inventory interactions
         if (event.getClick().isShiftClick()
                 || event.getClick().isKeyboardClick()
-                || event.getClick().isCreativeAction()) {
+                || event.getClick().isCreativeAction()
+                || event.getClick().isDoubleClick()) {
             return;
         }
 
+        // Previous page
         if (slot == 45) {
             changePage(player, gui, -1);
             return;
         }
 
+        // Next page
         if (slot == 53) {
             changePage(player, gui, 1);
             return;
         }
 
+        // Purchase listing
         Integer listingId = gui.getListingId(slot);
 
         if (listingId == null) {
@@ -95,14 +105,23 @@ public class AuctionListener implements Listener {
         purchase(player, listingId);
     }
 
+    // ==========================================
+    // PAGINATION
+    // ==========================================
+
     private void changePage(
             Player player,
             AuctionGUI currentGUI,
             int direction
     ) {
 
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
         int newPage = currentGUI.getPage() + direction;
 
+        // Check page boundaries
         if (newPage < 0
                 || newPage >= currentGUI.getTotalPages()) {
             return;
@@ -110,19 +129,31 @@ public class AuctionListener implements Listener {
 
         try {
 
+            // Reload listings from database
             var listings = auctionManager.getListings();
 
+            // Create requested page
             AuctionGUI newGUI = new AuctionGUI(
                     listings,
                     newPage
             );
 
-            player.openInventory(newGUI.getInventory());
+            // Open inventory on next server tick
+            Bukkit.getScheduler().runTask(plugin, () -> {
+
+                if (!player.isOnline()) {
+                    return;
+                }
+
+                player.openInventory(newGUI.getInventory());
+                player.updateInventory();
+
+            });
 
         } catch (SQLException exception) {
 
             plugin.getLogger().severe(
-                    "Gagal memuat halaman Auction House: "
+                    "Failed to load Auction House page: "
                             + exception.getMessage()
             );
 
@@ -133,6 +164,10 @@ public class AuctionListener implements Listener {
         }
     }
 
+    // ==========================================
+    // INVENTORY DRAG
+    // ==========================================
+
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
 
@@ -142,6 +177,10 @@ public class AuctionListener implements Listener {
             event.setCancelled(true);
         }
     }
+
+    // ==========================================
+    // PURCHASE LISTING
+    // ==========================================
 
     private void purchase(Player buyer, int listingId) {
 
@@ -187,13 +226,14 @@ public class AuctionListener implements Listener {
 
             ItemStack item = listing.getItem();
 
-            if (item == null || item.getType().isAir()
+            if (item == null
+                    || item.getType().isAir()
                     || item.getAmount() <= 0) {
 
                 buyer.sendMessage(lang().get("auction.invalid-item"));
 
                 plugin.getLogger().severe(
-                        "Item listing tidak valid. ID: " + listingId
+                        "Invalid auction item. Listing ID: " + listingId
                 );
 
                 return;
@@ -214,6 +254,7 @@ public class AuctionListener implements Listener {
             OfflinePlayer seller =
                     Bukkit.getOfflinePlayer(sellerUUID);
 
+            // Withdraw buyer money
             if (!economyManager.withdraw(buyer, price)) {
                 buyer.sendMessage(lang().get("auction.payment-failed"));
                 return;
@@ -231,7 +272,7 @@ public class AuctionListener implements Listener {
                         buyer,
                         listingId,
                         price,
-                        "Gagal menghapus listing: "
+                        "Failed to delete listing: "
                                 + exception.getMessage()
                 );
 
@@ -248,13 +289,14 @@ public class AuctionListener implements Listener {
                         buyer,
                         listingId,
                         price,
-                        "Listing tidak berhasil dihapus."
+                        "Listing was not deleted."
                 );
 
                 buyer.sendMessage(lang().get("auction.unavailable"));
                 return;
             }
 
+            // Deposit seller money
             if (!economyManager.deposit(seller, price)) {
 
                 boolean restored = restoreListing(listing);
@@ -268,7 +310,7 @@ public class AuctionListener implements Listener {
                         listingId,
                         buyer.getUniqueId(),
                         price,
-                        "Pembayaran seller gagal. Listing restored="
+                        "Seller payment failed. Listing restored="
                                 + restored
                                 + ", buyer refunded=" + refunded
                 );
@@ -280,6 +322,7 @@ public class AuctionListener implements Listener {
                 return;
             }
 
+            // Deliver purchased item
             try {
 
                 ItemStack purchasedItem = item.clone();
@@ -301,7 +344,7 @@ public class AuctionListener implements Listener {
                         listingId,
                         buyer.getUniqueId(),
                         price,
-                        "Pembayaran berhasil tetapi pengiriman item gagal: "
+                        "Payment succeeded but item delivery failed: "
                                 + exception.getMessage()
                 );
 
@@ -312,6 +355,7 @@ public class AuctionListener implements Listener {
                 return;
             }
 
+            // Buyer notification
             buyer.sendMessage(
                     lang().get(
                             "auction.purchase-success",
@@ -320,6 +364,7 @@ public class AuctionListener implements Listener {
                     )
             );
 
+            // Seller notification
             Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
             if (onlineSeller != null && onlineSeller.isOnline()) {
@@ -348,7 +393,8 @@ public class AuctionListener implements Listener {
             buyer.sendMessage(lang().get("auction.database-error"));
 
             plugin.getLogger().severe(
-                    "Auction purchase error: " + exception.getMessage()
+                    "Auction purchase error: "
+                            + exception.getMessage()
             );
 
         } catch (RuntimeException exception) {
@@ -356,7 +402,8 @@ public class AuctionListener implements Listener {
             buyer.sendMessage(lang().get("auction.general-error"));
 
             plugin.getLogger().severe(
-                    "Auction runtime error: " + exception.getMessage()
+                    "Auction runtime error: "
+                            + exception.getMessage()
             );
 
         } finally {
@@ -364,6 +411,10 @@ public class AuctionListener implements Listener {
             processing.remove(listingId);
         }
     }
+
+    // ==========================================
+    // REFUND
+    // ==========================================
 
     private void refundBuyer(
             Player buyer,
@@ -380,10 +431,14 @@ public class AuctionListener implements Listener {
                     listingId,
                     buyer.getUniqueId(),
                     amount,
-                    reason + " Refund gagal."
+                    reason + " Refund failed."
             );
         }
     }
+
+    // ==========================================
+    // RESTORE LISTING
+    // ==========================================
 
     private boolean restoreListing(AuctionListing listing) {
 
@@ -409,13 +464,17 @@ public class AuctionListener implements Listener {
         } catch (Exception exception) {
 
             plugin.getLogger().severe(
-                    "Gagal memulihkan listing: "
+                    "Failed to restore listing: "
                             + exception.getMessage()
             );
 
             return false;
         }
     }
+
+    // ==========================================
+    // RECOVERY LOG
+    // ==========================================
 
     private void logRecovery(
             int listingId,
@@ -425,7 +484,7 @@ public class AuctionListener implements Listener {
     ) {
 
         plugin.getLogger().severe(
-                "AUCTION TRANSACTION MEMERLUKAN PEMERIKSAAN ADMIN! "
+                "AUCTION TRANSACTION REQUIRES ADMIN REVIEW! "
                         + "Listing=" + listingId
                         + ", Buyer=" + buyer
                         + ", Amount=" + amount
