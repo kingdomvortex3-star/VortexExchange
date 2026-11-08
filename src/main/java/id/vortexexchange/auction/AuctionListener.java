@@ -69,7 +69,7 @@ public class AuctionListener implements Listener {
 
         int slot = event.getRawSlot();
 
-        // Close Auction House
+        // Close menu
         if (slot == 49) {
             player.closeInventory();
             return;
@@ -94,14 +94,13 @@ public class AuctionListener implements Listener {
             return;
         }
 
-        // Find listing
+        // Purchase listing
         Integer listingId = gui.getListingId(slot);
 
         if (listingId == null) {
             return;
         }
 
-        // Purchase listing
         purchase(player, listingId);
     }
 
@@ -121,7 +120,6 @@ public class AuctionListener implements Listener {
 
         int newPage = currentGUI.getPage() + direction;
 
-        // Check page boundaries
         if (newPage < 0
                 || newPage >= currentGUI.getTotalPages()) {
             return;
@@ -129,16 +127,13 @@ public class AuctionListener implements Listener {
 
         try {
 
-            // Reload active listings
             var listings = auctionManager.getListings();
 
-            // Create new page
             AuctionGUI newGUI = new AuctionGUI(
                     listings,
                     newPage
             );
 
-            // Open GUI on next server tick
             Bukkit.getScheduler().runTask(plugin, () -> {
 
                 if (!player.isOnline()) {
@@ -254,7 +249,6 @@ public class AuctionListener implements Listener {
             OfflinePlayer seller =
                     Bukkit.getOfflinePlayer(sellerUUID);
 
-            // Withdraw buyer money
             if (!economyManager.withdraw(buyer, price)) {
                 buyer.sendMessage(lang().get("auction.payment-failed"));
                 return;
@@ -296,7 +290,6 @@ public class AuctionListener implements Listener {
                 return;
             }
 
-            // Deposit seller money
             if (!economyManager.deposit(seller, price)) {
 
                 boolean restored = restoreListing(listing);
@@ -322,7 +315,6 @@ public class AuctionListener implements Listener {
                 return;
             }
 
-            // Deliver purchased item
             try {
 
                 ItemStack purchasedItem = item.clone();
@@ -355,7 +347,6 @@ public class AuctionListener implements Listener {
                 return;
             }
 
-            // Buyer notification
             buyer.sendMessage(
                     lang().get(
                             "auction.purchase-success",
@@ -364,7 +355,6 @@ public class AuctionListener implements Listener {
                     )
             );
 
-            // Seller notification
             Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
             if (onlineSeller != null && onlineSeller.isOnline()) {
