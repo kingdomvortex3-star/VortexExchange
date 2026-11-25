@@ -162,6 +162,137 @@ public class AuctionManager {
         }
     }
 
+    /**
+     * Membatalkan listing milik pemain dan memindahkan item ke Mailbox
+     * dalam satu transaksi database.
+     */
+    public synchronized boolean cancelListingToMailbox(
+            int listingId,
+            UUID sellerUUID
+    ) throws SQLException {
+
+        if (listingId <= 0 || sellerUUID == null) {
+            return false;
+        }
+
+        Connection connection = database.getConnection();
+
+        if (connection == null || connection.isClosed()) {
+            throw new SQLException("Database tidak tersedia.");
+        }
+
+        boolean previousAutoCommit = connection.getAutoCommit();
+
+        if (!previousAutoCommit) {
+            throw new SQLException(
+                    "Database sedang menjalankan transaksi lain."
+            );
+        }
+
+        long currentTime = System.currentTimeMillis();
+
+        try {
+            connection.setAutoCommit(false);
+
+            String itemData;
+
+            String selectSQL = """
+                SELECT item_data
+                FROM auctions
+                WHERE id = ?
+                  AND seller_uuid = ?
+                  AND expires_at > ?
+            """;
+
+            try (PreparedStatement select =
+                         connection.prepareStatement(selectSQL)) {
+
+                select.setInt(1, listingId);
+                select.setString(2, sellerUUID.toString());
+                select.setLong(3, currentTime);
+
+                try (ResultSet result = select.executeQuery()) {
+                    if (!result.next()) {
+                        connection.commit();
+                        return false;
+                    }
+
+                    itemData = result.getString("item_data");
+                }
+            }
+
+            if (itemData == null || itemData.isBlank()) {
+                throw new SQLException(
+                        "Data item listing kosong. Listing ID: " + listingId
+                );
+            }
+
+            String insertSQL = """
+                INSERT INTO mailbox
+                (player_uuid, item_data, created_at)
+                VALUES (?, ?, ?)
+            """;
+
+            try (PreparedStatement insert =
+                         connection.prepareStatement(insertSQL)) {
+
+                insert.setString(1, sellerUUID.toString());
+                insert.setString(2, itemData);
+                insert.setLong(3, currentTime);
+
+                if (insert.executeUpdate() != 1) {
+                    throw new SQLException(
+                            "Gagal menyimpan item ke Mailbox. Listing ID: "
+                                    + listingId
+                    );
+                }
+            }
+
+            String deleteSQL = """
+                DELETE FROM auctions
+                WHERE id = ?
+                  AND seller_uuid = ?
+                  AND expires_at > ?
+            """;
+
+            try (PreparedStatement delete =
+                         connection.prepareStatement(deleteSQL)) {
+
+                delete.setInt(1, listingId);
+                delete.setString(2, sellerUUID.toString());
+                delete.setLong(3, currentTime);
+
+                if (delete.executeUpdate() != 1) {
+                    throw new SQLException(
+                            "Listing gagal dibatalkan. ID: " + listingId
+                    );
+                }
+            }
+
+            connection.commit();
+            return true;
+
+        } catch (SQLException | RuntimeException exception) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+
+            if (exception instanceof SQLException sqlException) {
+                throw sqlException;
+            }
+
+            throw new SQLException(
+                    "Gagal membatalkan listing " + listingId,
+                    exception
+            );
+
+        } finally {
+            connection.setAutoCommit(previousAutoCommit);
+        }
+    }
+
     public int getPlayerListingCount(UUID sellerUUID)
             throws SQLException {
 
