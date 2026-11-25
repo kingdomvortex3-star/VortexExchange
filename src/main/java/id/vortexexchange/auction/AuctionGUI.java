@@ -15,8 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Arrays;
+import java.util.UUID;
 
 public class AuctionGUI implements InventoryHolder {
 
@@ -26,6 +26,7 @@ public class AuctionGUI implements InventoryHolder {
     private final int page;
     private final int totalPages;
     private final int totalListings;
+
     private final UUID viewerUUID;
 
     private static final int ITEMS_PER_PAGE = 51;
@@ -56,6 +57,7 @@ public class AuctionGUI implements InventoryHolder {
             int requestedPage,
             UUID viewerUUID
     ) {
+
         this.viewerUUID = viewerUUID;
 
         List<AuctionListing> availableListings = new ArrayList<>();
@@ -140,6 +142,9 @@ public class AuctionGUI implements InventoryHolder {
 
                 List<String> lore = new ArrayList<>();
 
+                boolean ownListing = viewerUUID != null
+                        && viewerUUID.equals(listing.getSellerUUID());
+
                 lore.add(color("&8&m--------------------------"));
                 lore.add(color("&b&lSELLER INFORMATION"));
                 lore.add(color("&7Penjual: &f" + listing.getSellerName()));
@@ -152,10 +157,10 @@ public class AuctionGUI implements InventoryHolder {
                 lore.add(color("&8Listing ID: &7#" + listing.getId()));
                 lore.add(color("&8&m--------------------------"));
 
-                if (viewerUUID != null
-                        && viewerUUID.equals(listing.getSellerUUID())) {
+                if (ownListing) {
                     lore.add(color("&a&lINI BARANG MILIKMU"));
-                    lore.add(color("&eKlik untuk mengambil kembali barang ini."));
+                    lore.add(color("&eKlik untuk mengambil kembali barang."));
+                    lore.add(color("&7Barang akan masuk ke Mailbox."));
                 } else {
                     lore.add(color("&e&lKLIK UNTUK MEMBELI"));
                 }
@@ -178,6 +183,7 @@ public class AuctionGUI implements InventoryHolder {
     private void addControls() {
 
         if (page > 0) {
+
             inventory.setItem(
                     45,
                     createItem(
@@ -189,7 +195,9 @@ public class AuctionGUI implements InventoryHolder {
                             "&eKlik untuk kembali."
                     )
             );
+
         } else {
+
             inventory.setItem(
                     45,
                     createItem(
@@ -212,6 +220,7 @@ public class AuctionGUI implements InventoryHolder {
         );
 
         if (page < totalPages - 1) {
+
             inventory.setItem(
                     53,
                     createItem(
@@ -223,7 +232,9 @@ public class AuctionGUI implements InventoryHolder {
                             "&eKlik untuk melanjutkan."
                     )
             );
+
         } else {
+
             inventory.setItem(
                     53,
                     createItem(
@@ -251,6 +262,7 @@ public class AuctionGUI implements InventoryHolder {
             meta.setDisplayName(color(name));
 
             if (lore != null && lore.length > 0) {
+
                 meta.setLore(
                         Arrays.stream(lore)
                                 .map(this::color)
@@ -284,6 +296,10 @@ public class AuctionGUI implements InventoryHolder {
 
     public int getTotalListings() {
         return totalListings;
+    }
+
+    public UUID getViewerUUID() {
+        return viewerUUID;
     }
 
     @Override
