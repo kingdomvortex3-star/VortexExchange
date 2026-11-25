@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.Arrays;
 
 public class AuctionGUI implements InventoryHolder {
@@ -25,6 +26,7 @@ public class AuctionGUI implements InventoryHolder {
     private final int page;
     private final int totalPages;
     private final int totalListings;
+    private final UUID viewerUUID;
 
     private static final int ITEMS_PER_PAGE = 51;
 
@@ -42,10 +44,19 @@ public class AuctionGUI implements InventoryHolder {
             new DecimalFormat("#,##0.##");
 
     public AuctionGUI(List<AuctionListing> listings) {
-        this(listings, 0);
+        this(listings, 0, null);
     }
 
     public AuctionGUI(List<AuctionListing> listings, int requestedPage) {
+        this(listings, requestedPage, null);
+    }
+
+    public AuctionGUI(
+            List<AuctionListing> listings,
+            int requestedPage,
+            UUID viewerUUID
+    ) {
+        this.viewerUUID = viewerUUID;
 
         List<AuctionListing> availableListings = new ArrayList<>();
 
@@ -140,7 +151,14 @@ public class AuctionGUI implements InventoryHolder {
                 lore.add(color(""));
                 lore.add(color("&8Listing ID: &7#" + listing.getId()));
                 lore.add(color("&8&m--------------------------"));
-                lore.add(color("&e&lKLIK UNTUK MEMBELI"));
+
+                if (viewerUUID != null
+                        && viewerUUID.equals(listing.getSellerUUID())) {
+                    lore.add(color("&a&lINI BARANG MILIKMU"));
+                    lore.add(color("&eKlik untuk mengambil kembali barang ini."));
+                } else {
+                    lore.add(color("&e&lKLIK UNTUK MEMBELI"));
+                }
 
                 meta.setLore(lore);
                 meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
@@ -159,9 +177,7 @@ public class AuctionGUI implements InventoryHolder {
 
     private void addControls() {
 
-        // Previous page - bottom left
         if (page > 0) {
-
             inventory.setItem(
                     45,
                     createItem(
@@ -173,9 +189,7 @@ public class AuctionGUI implements InventoryHolder {
                             "&eKlik untuk kembali."
                     )
             );
-
         } else {
-
             inventory.setItem(
                     45,
                     createItem(
@@ -187,7 +201,6 @@ public class AuctionGUI implements InventoryHolder {
             );
         }
 
-        // Close - bottom center
         inventory.setItem(
                 49,
                 createItem(
@@ -198,9 +211,7 @@ public class AuctionGUI implements InventoryHolder {
                 )
         );
 
-        // Next page - bottom right
         if (page < totalPages - 1) {
-
             inventory.setItem(
                     53,
                     createItem(
@@ -212,9 +223,7 @@ public class AuctionGUI implements InventoryHolder {
                             "&eKlik untuk melanjutkan."
                     )
             );
-
         } else {
-
             inventory.setItem(
                     53,
                     createItem(
@@ -242,7 +251,6 @@ public class AuctionGUI implements InventoryHolder {
             meta.setDisplayName(color(name));
 
             if (lore != null && lore.length > 0) {
-
                 meta.setLore(
                         Arrays.stream(lore)
                                 .map(this::color)
