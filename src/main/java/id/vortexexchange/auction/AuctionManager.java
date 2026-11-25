@@ -38,7 +38,10 @@ public class AuctionManager {
                 || !Double.isFinite(price)
                 || price <= 0
                 || durationMillis <= 0) {
-            throw new IllegalArgumentException("Data listing tidak valid.");
+
+            throw new IllegalArgumentException(
+                    "Data listing tidak valid."
+            );
         }
 
         long createdAt = System.currentTimeMillis();
@@ -101,6 +104,7 @@ public class AuctionManager {
     }
 
     public List<AuctionListing> getListings() throws SQLException {
+
         List<AuctionListing> listings = new ArrayList<>();
 
         String sql = """
@@ -116,7 +120,9 @@ public class AuctionManager {
             statement.setLong(1, System.currentTimeMillis());
 
             try (ResultSet result = statement.executeQuery()) {
+
                 while (result.next()) {
+
                     AuctionListing listing = readListing(result);
 
                     if (listing != null) {
@@ -130,6 +136,7 @@ public class AuctionManager {
     }
 
     public AuctionListing getListing(int id) throws SQLException {
+
         String sql = """
             SELECT *
             FROM auctions
@@ -142,6 +149,7 @@ public class AuctionManager {
             statement.setInt(1, id);
 
             try (ResultSet result = statement.executeQuery()) {
+
                 if (!result.next()) {
                     return null;
                 }
@@ -152,19 +160,23 @@ public class AuctionManager {
     }
 
     public boolean deleteListing(int id) throws SQLException {
+
         String sql = "DELETE FROM auctions WHERE id = ?";
 
         try (PreparedStatement statement =
                      database.getConnection().prepareStatement(sql)) {
 
             statement.setInt(1, id);
+
             return statement.executeUpdate() == 1;
         }
     }
 
     /**
-     * Membatalkan listing milik pemain dan memindahkan item ke Mailbox
-     * dalam satu transaksi database.
+     * Membatalkan listing dan memasukkan barang ke Mailbox.
+     *
+     * Item dan listing diproses dalam satu transaksi SQLite.
+     * Jika salah satu proses gagal, seluruh transaksi di-rollback.
      */
     public synchronized boolean cancelListingToMailbox(
             int listingId,
@@ -183,19 +195,13 @@ public class AuctionManager {
 
         boolean previousAutoCommit = connection.getAutoCommit();
 
-        if (!previousAutoCommit) {
-            throw new SQLException(
-                    "Database sedang menjalankan transaksi lain."
-            );
-        }
-
-        long currentTime = System.currentTimeMillis();
-
         try {
+
             connection.setAutoCommit(false);
 
             String itemData;
 
+            // 1. Pastikan listing benar-benar milik pemain.
             String selectSQL = """
                 SELECT item_data
                 FROM auctions
@@ -209,9 +215,10 @@ public class AuctionManager {
 
                 select.setInt(1, listingId);
                 select.setString(2, sellerUUID.toString());
-                select.setLong(3, currentTime);
+                select.setLong(3, System.currentTimeMillis());
 
                 try (ResultSet result = select.executeQuery()) {
+
                     if (!result.next()) {
                         connection.commit();
                         return false;
@@ -223,10 +230,11 @@ public class AuctionManager {
 
             if (itemData == null || itemData.isBlank()) {
                 throw new SQLException(
-                        "Data item listing kosong. Listing ID: " + listingId
+                        "Data item listing kosong: " + listingId
                 );
             }
 
+            // 2. Masukkan barang ke Mailbox.
             String insertSQL = """
                 INSERT INTO mailbox
                 (player_uuid, item_data, created_at)
@@ -238,16 +246,16 @@ public class AuctionManager {
 
                 insert.setString(1, sellerUUID.toString());
                 insert.setString(2, itemData);
-                insert.setLong(3, currentTime);
+                insert.setLong(3, System.currentTimeMillis());
 
                 if (insert.executeUpdate() != 1) {
                     throw new SQLException(
-                            "Gagal menyimpan item ke Mailbox. Listing ID: "
-                                    + listingId
+                            "Gagal menyimpan item ke Mailbox."
                     );
                 }
             }
 
+            // 3. Hapus listing setelah item berhasil masuk Mailbox.
             String deleteSQL = """
                 DELETE FROM auctions
                 WHERE id = ?
@@ -260,19 +268,22 @@ public class AuctionManager {
 
                 delete.setInt(1, listingId);
                 delete.setString(2, sellerUUID.toString());
-                delete.setLong(3, currentTime);
+                delete.setLong(3, System.currentTimeMillis());
 
                 if (delete.executeUpdate() != 1) {
                     throw new SQLException(
-                            "Listing gagal dibatalkan. ID: " + listingId
+                            "Listing gagal dihapus: " + listingId
                     );
                 }
             }
 
+            // 4. Simpan seluruh perubahan.
             connection.commit();
+
             return true;
 
         } catch (SQLException | RuntimeException exception) {
+
             try {
                 connection.rollback();
             } catch (SQLException rollbackException) {
@@ -284,11 +295,12 @@ public class AuctionManager {
             }
 
             throw new SQLException(
-                    "Gagal membatalkan listing " + listingId,
+                    "Gagal membatalkan listing: " + listingId,
                     exception
             );
 
         } finally {
+
             connection.setAutoCommit(previousAutoCommit);
         }
     }
@@ -304,7 +316,7 @@ public class AuctionManager {
             SELECT COUNT(*)
             FROM auctions
             WHERE seller_uuid = ?
-            AND expires_at > ?
+              AND expires_at > ?
         """;
 
         try (PreparedStatement statement =
@@ -314,7 +326,10 @@ public class AuctionManager {
             statement.setLong(2, System.currentTimeMillis());
 
             try (ResultSet result = statement.executeQuery()) {
-                return result.next() ? result.getInt(1) : 0;
+
+                return result.next()
+                        ? result.getInt(1)
+                        : 0;
             }
         }
     }
@@ -327,6 +342,7 @@ public class AuctionManager {
             throws SQLException {
 
         try {
+
             ItemStack item = ItemSerializer.deserialize(
                     result.getString("item_data")
             );
@@ -346,6 +362,7 @@ public class AuctionManager {
             );
 
         } catch (IllegalArgumentException exception) {
+
             return null;
         }
     }
