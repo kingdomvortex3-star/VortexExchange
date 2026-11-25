@@ -21,18 +21,14 @@ public class LanguageManager {
     private void loadLanguages() {
 
         // INDONESIAN
-
         indonesia.put("permission.denied", "&cKamu tidak memiliki izin.");
         indonesia.put("player.only", "&cPerintah ini hanya untuk pemain.");
         indonesia.put("player.not-found", "&cPemain tidak ditemukan.");
         indonesia.put("economy.missing", "&cVault atau plugin ekonomi tidak ditemukan.");
 
         // AUCTION HOUSE
-
         indonesia.put("auction.disabled", "&cAuction House sedang dinonaktifkan.");
         indonesia.put("auction.success", "&aBarang berhasil dipasang di Auction House!");
-        indonesia.put("auction.cancel-success", "&aListing dibatalkan! Barang kamu dikembalikan ke inventory/Mailbox.");
-        indonesia.put("auction.cancel-failed", "&cGagal mengambil kembali barang dari Auction House. Hubungi admin.");
         indonesia.put("auction.price", "&7Harga: &b{price}");
         indonesia.put("auction.new", "&eAUCTION BARU!");
         indonesia.put("auction.seller", "&f{player} &7sedang melelang barang!");
@@ -63,8 +59,14 @@ public class LanguageManager {
         indonesia.put("auction.duration-invalid", "&cDurasi listing tidak valid.");
         indonesia.put("auction.listing-count", "&7Listing aktif: &b{current}&7/&b{maximum}");
 
-        // PLAYER TRADE
+        // AUCTION CANCEL
+        indonesia.put("auction.cancel-success", "&aListing berhasil dibatalkan! Barang dikirim ke Mailbox.");
+        indonesia.put("auction.cancel-failed", "&cGagal membatalkan listing. Coba lagi.");
+        indonesia.put("auction.cancel-owner-only", "&cKamu hanya bisa membatalkan listing milik sendiri.");
+        indonesia.put("auction.cancel-hint", "&eKlik listing milikmu untuk membatalkan dan mengambil barang.");
+        indonesia.put("auction.cancel-processing", "&cListing sedang diproses, tunggu sebentar.");
 
+        // PLAYER TRADE
         indonesia.put("trade.disabled", "&cPlayer Trade sedang dinonaktifkan.");
         indonesia.put("trade.usage", "&cGunakan perintah trade dengan benar.");
         indonesia.put("trade.self", "&cKamu tidak bisa trade dengan diri sendiri.");
@@ -101,7 +103,6 @@ public class LanguageManager {
         indonesia.put("trade.help-deny", "&7/trade deny &8- &fTolak permintaan");
         indonesia.put("trade.help-toggle", "&7/trade toggle &8- &fAktif/nonaktif permintaan");
         indonesia.put("trade.help-money", "&7/trade money <jumlah> &8- &fTawarkan uang");
-
         indonesia.put("trade.cancelled", "&cTrade dibatalkan.");
         indonesia.put("trade.items-disabled", "&cPenawaran barang sedang dinonaktifkan.");
         indonesia.put("trade.slots-full", "&cSlot penawaran barang sudah penuh.");
@@ -122,25 +123,20 @@ public class LanguageManager {
         indonesia.put("trade.completed-with", "&aTrade dengan &f{player} &aberhasil diselesaikan!");
 
         // MAILBOX
-
         indonesia.put("mailbox.remaining", "&eKamu masih memiliki &b{count} &ebarang di Mailbox!");
         indonesia.put("mailbox.empty-inventory", "&7Kosongkan inventory untuk menerima semua barang.");
         indonesia.put("mailbox.error", "&cMailbox gagal diperiksa. Hubungi admin.");
         indonesia.put("mailbox.delivered", "&aMailbox: &f{count} &aitem berhasil diterima.");
 
         // ENGLISH
-
         english.put("permission.denied", "&cYou do not have permission.");
         english.put("player.only", "&cThis command can only be used by players.");
         english.put("player.not-found", "&cPlayer not found.");
         english.put("economy.missing", "&cVault or an economy plugin was not found.");
 
         // AUCTION HOUSE
-
         english.put("auction.disabled", "&cAuction House is disabled.");
         english.put("auction.success", "&aYour item has been listed on the Auction House!");
-        english.put("auction.cancel-success", "&aListing cancelled! Your item has been returned to your inventory/Mailbox.");
-        english.put("auction.cancel-failed", "&cFailed to reclaim your item from the Auction House. Contact an admin.");
         english.put("auction.price", "&7Price: &b{price}");
         english.put("auction.new", "&eNEW AUCTION!");
         english.put("auction.seller", "&f{player} &7is auctioning an item!");
@@ -171,8 +167,14 @@ public class LanguageManager {
         english.put("auction.duration-invalid", "&cInvalid listing duration.");
         english.put("auction.listing-count", "&7Active listings: &b{current}&7/&b{maximum}");
 
-        // PLAYER TRADE
+        // AUCTION CANCEL
+        english.put("auction.cancel-success", "&aListing cancelled! Your item has been sent to your Mailbox.");
+        english.put("auction.cancel-failed", "&cFailed to cancel listing. Please try again.");
+        english.put("auction.cancel-owner-only", "&cYou can only cancel your own listings.");
+        english.put("auction.cancel-hint", "&eClick your own listing to cancel it and retrieve your item.");
+        english.put("auction.cancel-processing", "&cThis listing is being processed. Please wait.");
 
+        // PLAYER TRADE
         english.put("trade.disabled", "&cPlayer Trading is disabled.");
         english.put("trade.usage", "&cPlease use the trade command correctly.");
         english.put("trade.self", "&cYou cannot trade with yourself.");
@@ -209,7 +211,6 @@ public class LanguageManager {
         english.put("trade.help-deny", "&7/trade deny &8- &fDecline a request");
         english.put("trade.help-toggle", "&7/trade toggle &8- &fEnable/disable requests");
         english.put("trade.help-money", "&7/trade money <amount> &8- &fOffer money");
-
         english.put("trade.cancelled", "&cTrade cancelled.");
         english.put("trade.items-disabled", "&cItem offers are disabled.");
         english.put("trade.slots-full", "&cItem offer slots are full.");
@@ -230,7 +231,6 @@ public class LanguageManager {
         english.put("trade.completed-with", "&aTrade with &f{player} &acompleted successfully!");
 
         // MAILBOX
-
         english.put("mailbox.remaining", "&eYou still have &b{count} &eitems in your Mailbox!");
         english.put("mailbox.empty-inventory", "&7Clear your inventory to receive all items.");
         english.put("mailbox.error", "&cMailbox could not be checked. Contact an administrator.");
