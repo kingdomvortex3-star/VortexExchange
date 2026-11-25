@@ -43,10 +43,6 @@ public class AuctionListener implements Listener {
         return plugin.getLanguageManager();
     }
 
-    // ==========================================
-    // INVENTORY CLICK
-    // ==========================================
-
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
 
@@ -69,44 +65,35 @@ public class AuctionListener implements Listener {
 
         int slot = event.getRawSlot();
 
-        // Close menu
         if (slot == 49) {
             player.closeInventory();
             return;
         }
 
-        // Prevent unsafe inventory interactions
         if (event.getClick().isShiftClick()
                 || event.getClick().isKeyboardClick()
                 || event.getClick().isCreativeAction()) {
             return;
         }
 
-        // Previous page
         if (slot == 45) {
             changePage(player, gui, -1);
             return;
         }
 
-        // Next page
         if (slot == 53) {
             changePage(player, gui, 1);
             return;
         }
 
-        // Purchase listing
         Integer listingId = gui.getListingId(slot);
 
         if (listingId == null) {
             return;
         }
 
-        purchase(player, listingId);
+        handleListingClick(player, listingId);
     }
-
-    // ==========================================
-    // PAGINATION
-    // ==========================================
 
     private void changePage(
             Player player,
@@ -131,7 +118,8 @@ public class AuctionListener implements Listener {
 
             AuctionGUI newGUI = new AuctionGUI(
                     listings,
-                    newPage
+                    newPage,
+                    player.getUniqueId()
             );
 
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -159,10 +147,6 @@ public class AuctionListener implements Listener {
         }
     }
 
-    // ==========================================
-    // INVENTORY DRAG
-    // ==========================================
-
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
 
@@ -173,9 +157,89 @@ public class AuctionListener implements Listener {
         }
     }
 
-    // ==========================================
-    // PURCHASE LISTING
-    // ==========================================
+    private void handleListingClick(Player player, int listingId) {
+        try {
+            AuctionListing listing = auctionManager.getListing(listingId);
+
+            if (listing == null || listing.isExpired()) {
+                player.sendMessage(lang().get("auction.unavailable"));
+                player.closeInventory();
+                return;
+            }
+
+            if (listing.getSellerUUID().equals(player.getUniqueId())) {
+                reclaimListing(player, listingId);
+                return;
+            }
+
+            purchase(player, listingId);
+
+        } catch (SQLException exception) {
+            player.sendMessage(lang().get("auction.database-error"));
+            plugin.getLogger().severe(
+                    "Failed to inspect auction listing " + listingId
+                            + ": " + exception.getMessage()
+            );
+        }
+    }
+
+    private void reclaimListing(Player seller, int listingId) {
+        if (!processing.add(listingId)) {
+            seller.sendMessage(lang().get("auction.processing"));
+            return;
+        }
+
+        try {
+            boolean reclaimed = auctionManager.cancelListingToMailbox(
+                    listingId,
+                    seller.getUniqueId()
+            );
+
+            if (!reclaimed) {
+                seller.sendMessage(lang().get("auction.unavailable"));
+                seller.closeInventory();
+                return;
+            }
+
+            seller.closeInventory();
+            seller.sendMessage(lang().get("auction.cancel-success"));
+
+            plugin.getMailboxManager().deliver(seller);
+
+            try {
+                int remaining = plugin.getMailboxManager().getItemCount(
+                        seller.getUniqueId()
+                );
+
+                if (remaining > 0) {
+                    seller.sendMessage(lang().get(
+                            "mailbox.remaining",
+                            "count", String.valueOf(remaining)
+                    ));
+                    seller.sendMessage(lang().get("mailbox.empty-inventory"));
+                }
+
+            } catch (SQLException mailboxException) {
+                plugin.getLogger().severe(
+                        "Failed to check Mailbox after reclaim for "
+                                + seller.getUniqueId() + ": "
+                                + mailboxException.getMessage()
+                );
+                seller.sendMessage(lang().get("mailbox.error"));
+            }
+
+        } catch (SQLException exception) {
+            seller.sendMessage(lang().get("auction.cancel-failed"));
+            plugin.getLogger().severe(
+                    "Failed to reclaim auction listing " + listingId
+                            + " for " + seller.getUniqueId()
+                            + ": " + exception.getMessage()
+            );
+
+        } finally {
+            processing.remove(listingId);
+        }
+    }
 
     private void purchase(Player buyer, int listingId) {
 
@@ -257,7 +321,6 @@ public class AuctionListener implements Listener {
             boolean deleted;
 
             try {
-
                 deleted = auctionManager.deleteListing(listingId);
 
             } catch (SQLException exception) {
@@ -402,10 +465,6 @@ public class AuctionListener implements Listener {
         }
     }
 
-    // ==========================================
-    // REFUND
-    // ==========================================
-
     private void refundBuyer(
             Player buyer,
             int listingId,
@@ -425,10 +484,6 @@ public class AuctionListener implements Listener {
             );
         }
     }
-
-    // ==========================================
-    // RESTORE LISTING
-    // ==========================================
 
     private boolean restoreListing(AuctionListing listing) {
 
@@ -461,10 +516,6 @@ public class AuctionListener implements Listener {
             return false;
         }
     }
-
-    // ==========================================
-    // RECOVERY LOG
-    // ==========================================
 
     private void logRecovery(
             int listingId,
