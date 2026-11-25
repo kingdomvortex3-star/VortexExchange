@@ -31,6 +31,8 @@ public class LanguageManager {
 
         indonesia.put("auction.disabled", "&cAuction House sedang dinonaktifkan.");
         indonesia.put("auction.success", "&aBarang berhasil dipasang di Auction House!");
+        indonesia.put("auction.cancel-success", "&aListing dibatalkan! Barang kamu dikembalikan ke inventory/Mailbox.");
+        indonesia.put("auction.cancel-failed", "&cGagal mengambil kembali barang dari Auction House. Hubungi admin.");
         indonesia.put("auction.price", "&7Harga: &b{price}");
         indonesia.put("auction.new", "&eAUCTION BARU!");
         indonesia.put("auction.seller", "&f{player} &7sedang melelang barang!");
@@ -137,6 +139,8 @@ public class LanguageManager {
 
         english.put("auction.disabled", "&cAuction House is disabled.");
         english.put("auction.success", "&aYour item has been listed on the Auction House!");
+        english.put("auction.cancel-success", "&aListing cancelled! Your item has been returned to your inventory/Mailbox.");
+        english.put("auction.cancel-failed", "&cFailed to reclaim your item from the Auction House. Contact an admin.");
         english.put("auction.price", "&7Price: &b{price}");
         english.put("auction.new", "&eNEW AUCTION!");
         english.put("auction.seller", "&f{player} &7is auctioning an item!");
