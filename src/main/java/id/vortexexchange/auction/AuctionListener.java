@@ -6,7 +6,6 @@ import id.vortexexchange.economy.EconomyManager;
 import id.vortexexchange.util.LanguageManager;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -63,16 +62,16 @@ public class AuctionListener implements Listener {
             return;
         }
 
+        if (event.getClick().isShiftClick()
+                || event.getClick().isKeyboardClick()
+                || event.getClick().isCreativeAction()) {
+            return;
+        }
+
         int slot = event.getRawSlot();
 
         if (slot == 49) {
             player.closeInventory();
-            return;
-        }
-
-        if (event.getClick().isShiftClick()
-                || event.getClick().isKeyboardClick()
-                || event.getClick().isCreativeAction()) {
             return;
         }
 
@@ -95,15 +94,20 @@ public class AuctionListener implements Listener {
         handleListingClick(player, listingId);
     }
 
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+
+        if (event.getView().getTopInventory().getHolder()
+                instanceof AuctionGUI) {
+            event.setCancelled(true);
+        }
+    }
+
     private void changePage(
             Player player,
             AuctionGUI currentGUI,
             int direction
     ) {
-
-        if (player == null || !player.isOnline()) {
-            return;
-        }
 
         int newPage = currentGUI.getPage() + direction;
 
@@ -114,52 +118,41 @@ public class AuctionListener implements Listener {
 
         try {
 
-            var listings = auctionManager.getListings();
-
             AuctionGUI newGUI = new AuctionGUI(
-                    listings,
+                    auctionManager.getListings(),
                     newPage,
                     player.getUniqueId()
             );
 
-            Bukkit.getScheduler().runTask(plugin, () -> {
-
-                if (!player.isOnline()) {
-                    return;
-                }
-
-                player.openInventory(newGUI.getInventory());
-                player.updateInventory();
-
-            });
+            player.openInventory(newGUI.getInventory());
 
         } catch (SQLException exception) {
 
             plugin.getLogger().severe(
-                    "Failed to load Auction House page: "
+                    "Failed to load auction page: "
                             + exception.getMessage()
             );
 
             player.sendMessage(
-                    ChatColor.RED
-                            + "Gagal memuat halaman Auction House."
+                    "§cGagal memuat halaman Auction House."
             );
         }
     }
 
-    @EventHandler
-    public void onInventoryDrag(InventoryDragEvent event) {
+    private void handleListingClick(
+            Player player,
+            int listingId
+    ) {
 
-        if (event.getView().getTopInventory().getHolder()
-                instanceof AuctionGUI) {
-
-            event.setCancelled(true);
+        if (!processing.add(listingId)) {
+            player.sendMessage(lang().get("auction.processing"));
+            return;
         }
-    }
 
-    private void handleListingClick(Player player, int listingId) {
         try {
-            AuctionListing listing = auctionManager.getListing(listingId);
+
+            AuctionListing listing =
+                    auctionManager.getListing(listingId);
 
             if (listing == null || listing.isExpired()) {
                 player.sendMessage(lang().get("auction.unavailable"));
@@ -168,71 +161,19 @@ public class AuctionListener implements Listener {
             }
 
             if (listing.getSellerUUID().equals(player.getUniqueId())) {
+
                 reclaimListing(player, listingId);
                 return;
             }
 
-            purchase(player, listingId);
+            purchase(player, listing);
 
         } catch (SQLException exception) {
+
             player.sendMessage(lang().get("auction.database-error"));
+
             plugin.getLogger().severe(
-                    "Failed to inspect auction listing " + listingId
-                            + ": " + exception.getMessage()
-            );
-        }
-    }
-
-    private void reclaimListing(Player seller, int listingId) {
-        if (!processing.add(listingId)) {
-            seller.sendMessage(lang().get("auction.processing"));
-            return;
-        }
-
-        try {
-            boolean reclaimed = auctionManager.cancelListingToMailbox(
-                    listingId,
-                    seller.getUniqueId()
-            );
-
-            if (!reclaimed) {
-                seller.sendMessage(lang().get("auction.unavailable"));
-                seller.closeInventory();
-                return;
-            }
-
-            seller.closeInventory();
-            seller.sendMessage(lang().get("auction.cancel-success"));
-
-            plugin.getMailboxManager().deliver(seller);
-
-            try {
-                int remaining = plugin.getMailboxManager().getItemCount(
-                        seller.getUniqueId()
-                );
-
-                if (remaining > 0) {
-                    seller.sendMessage(lang().get(
-                            "mailbox.remaining",
-                            "count", String.valueOf(remaining)
-                    ));
-                    seller.sendMessage(lang().get("mailbox.empty-inventory"));
-                }
-
-            } catch (SQLException mailboxException) {
-                plugin.getLogger().severe(
-                        "Failed to check Mailbox after reclaim for "
-                                + seller.getUniqueId() + ": "
-                                + mailboxException.getMessage()
-                );
-                seller.sendMessage(lang().get("mailbox.error"));
-            }
-
-        } catch (SQLException exception) {
-            seller.sendMessage(lang().get("auction.cancel-failed"));
-            plugin.getLogger().severe(
-                    "Failed to reclaim auction listing " + listingId
-                            + " for " + seller.getUniqueId()
+                    "Failed to load listing " + listingId
                             + ": " + exception.getMessage()
             );
 
@@ -241,248 +182,211 @@ public class AuctionListener implements Listener {
         }
     }
 
-    private void purchase(Player buyer, int listingId) {
+    private void reclaimListing(
+            Player player,
+            int listingId
+    ) {
 
-        if (!processing.add(listingId)) {
-            buyer.sendMessage(lang().get("auction.processing"));
+        try {
+
+            boolean success =
+                    auctionManager.cancelListingToMailbox(
+                            listingId,
+                            player.getUniqueId()
+                    );
+
+            if (!success) {
+                player.sendMessage(
+                        lang().get("auction.unavailable")
+                );
+                return;
+            }
+
+            player.closeInventory();
+
+            player.sendMessage(
+                    "§a§lVORTEX EXCHANGE"
+            );
+
+            player.sendMessage(
+                    "§aListing berhasil dibatalkan!"
+            );
+
+            player.sendMessage(
+                    "§7Barang kamu sedang dikembalikan melalui Mailbox."
+            );
+
+            plugin.getMailboxManager().deliver(player);
+
+        } catch (SQLException exception) {
+
+            player.sendMessage(
+                    "§cGagal membatalkan listing. Silakan coba lagi."
+            );
+
+            plugin.getLogger().severe(
+                    "Failed to reclaim listing " + listingId
+                            + " for " + player.getUniqueId()
+                            + ": " + exception.getMessage()
+            );
+        }
+    }
+
+    private void purchase(
+            Player buyer,
+            AuctionListing listing
+    ) {
+
+        int listingId = listing.getId();
+
+        if (!plugin.getConfig().getBoolean(
+                "auction.enabled", true)) {
+            buyer.sendMessage(lang().get("auction.disabled"));
+            return;
+        }
+
+        if (!economyManager.isAvailable()) {
+            buyer.sendMessage(lang().get("economy.missing"));
+            return;
+        }
+
+        UUID sellerUUID = listing.getSellerUUID();
+
+        if (sellerUUID.equals(buyer.getUniqueId())) {
+            buyer.sendMessage(lang().get("auction.own-item"));
+            return;
+        }
+
+        ItemStack item = listing.getItem();
+
+        if (item == null || item.getType().isAir()) {
+            buyer.sendMessage(lang().get("auction.invalid-item"));
+            return;
+        }
+
+        double price = listing.getPrice();
+
+        if (!Double.isFinite(price) || price <= 0) {
+            buyer.sendMessage(lang().get("auction.invalid-price"));
+            return;
+        }
+
+        if (!economyManager.has(buyer, price)) {
+            buyer.sendMessage(lang().get("auction.no-balance"));
+            return;
+        }
+
+        OfflinePlayer seller = Bukkit.getOfflinePlayer(sellerUUID);
+
+        if (!economyManager.withdraw(buyer, price)) {
+            buyer.sendMessage(lang().get("auction.payment-failed"));
+            return;
+        }
+
+        boolean deleted;
+
+        try {
+
+            deleted = auctionManager.deleteListing(listingId);
+
+        } catch (SQLException exception) {
+
+            boolean refunded = economyManager.deposit(buyer, price);
+
+            plugin.getLogger().severe(
+                    "Auction delete failed. Listing=" + listingId
+                            + ", Refunded=" + refunded
+                            + ": " + exception.getMessage()
+            );
+
+            buyer.sendMessage(
+                    lang().get("auction.transaction-error")
+            );
+
+            return;
+        }
+
+        if (!deleted) {
+
+            economyManager.deposit(buyer, price);
+
+            buyer.sendMessage(lang().get("auction.unavailable"));
+            return;
+        }
+
+        if (!economyManager.deposit(seller, price)) {
+
+            boolean restored = restoreListing(listing);
+            boolean refunded = economyManager.deposit(buyer, price);
+
+            plugin.getLogger().severe(
+                    "Auction recovery required. Listing=" + listingId
+                            + ", Restored=" + restored
+                            + ", Refunded=" + refunded
+            );
+
+            buyer.sendMessage(
+                    lang().get("auction.transaction-error")
+            );
+
             return;
         }
 
         try {
 
-            if (!plugin.getConfig().getBoolean(
-                    "auction.enabled", true)) {
+            var leftovers = buyer.getInventory().addItem(item.clone());
 
-                buyer.sendMessage(lang().get("auction.disabled"));
-                return;
-            }
-
-            if (!economyManager.isAvailable()) {
-                buyer.sendMessage(lang().get("economy.missing"));
-                return;
-            }
-
-            AuctionListing listing =
-                    auctionManager.getListing(listingId);
-
-            if (listing == null || listing.isExpired()) {
-                buyer.sendMessage(lang().get("auction.unavailable"));
-                buyer.closeInventory();
-                return;
-            }
-
-            UUID sellerUUID = listing.getSellerUUID();
-
-            if (sellerUUID == null) {
-                buyer.sendMessage(lang().get("auction.invalid-seller"));
-                return;
-            }
-
-            if (sellerUUID.equals(buyer.getUniqueId())) {
-                buyer.sendMessage(lang().get("auction.own-item"));
-                return;
-            }
-
-            ItemStack item = listing.getItem();
-
-            if (item == null
-                    || item.getType().isAir()
-                    || item.getAmount() <= 0) {
-
-                buyer.sendMessage(lang().get("auction.invalid-item"));
-
-                plugin.getLogger().severe(
-                        "Invalid auction item. Listing ID: " + listingId
-                );
-
-                return;
-            }
-
-            double price = listing.getPrice();
-
-            if (!Double.isFinite(price) || price <= 0) {
-                buyer.sendMessage(lang().get("auction.invalid-price"));
-                return;
-            }
-
-            if (!economyManager.has(buyer, price)) {
-                buyer.sendMessage(lang().get("auction.no-balance"));
-                return;
-            }
-
-            OfflinePlayer seller =
-                    Bukkit.getOfflinePlayer(sellerUUID);
-
-            if (!economyManager.withdraw(buyer, price)) {
-                buyer.sendMessage(lang().get("auction.payment-failed"));
-                return;
-            }
-
-            boolean deleted;
-
-            try {
-                deleted = auctionManager.deleteListing(listingId);
-
-            } catch (SQLException exception) {
-
-                refundBuyer(
-                        buyer,
-                        listingId,
-                        price,
-                        "Failed to delete listing: "
-                                + exception.getMessage()
-                );
-
-                buyer.sendMessage(
-                        lang().get("auction.transaction-error")
-                );
-
-                return;
-            }
-
-            if (!deleted) {
-
-                refundBuyer(
-                        buyer,
-                        listingId,
-                        price,
-                        "Listing was not deleted."
-                );
-
-                buyer.sendMessage(lang().get("auction.unavailable"));
-                return;
-            }
-
-            if (!economyManager.deposit(seller, price)) {
-
-                boolean restored = restoreListing(listing);
-
-                boolean refunded = economyManager.deposit(
-                        buyer,
-                        price
-                );
-
-                logRecovery(
-                        listingId,
-                        buyer.getUniqueId(),
-                        price,
-                        "Seller payment failed. Listing restored="
-                                + restored
-                                + ", buyer refunded=" + refunded
-                );
-
-                buyer.sendMessage(
-                        lang().get("auction.transaction-error")
-                );
-
-                return;
-            }
-
-            try {
-
-                ItemStack purchasedItem = item.clone();
-
-                var leftovers = buyer.getInventory().addItem(
-                        purchasedItem
-                );
-
-                leftovers.values().forEach(leftover ->
-                        buyer.getWorld().dropItemNaturally(
-                                buyer.getLocation(),
-                                leftover
-                        )
-                );
-
-            } catch (RuntimeException exception) {
-
-                logRecovery(
-                        listingId,
-                        buyer.getUniqueId(),
-                        price,
-                        "Payment succeeded but item delivery failed: "
-                                + exception.getMessage()
-                );
-
-                buyer.sendMessage(
-                        lang().get("auction.delivery-error")
-                );
-
-                return;
-            }
-
-            buyer.sendMessage(
-                    lang().get(
-                            "auction.purchase-success",
-                            "price",
-                            economyManager.format(price)
+            leftovers.values().forEach(leftover ->
+                    buyer.getWorld().dropItemNaturally(
+                            buyer.getLocation(),
+                            leftover
                     )
-            );
-
-            Player onlineSeller = Bukkit.getPlayer(sellerUUID);
-
-            if (onlineSeller != null && onlineSeller.isOnline()) {
-
-                onlineSeller.sendMessage(
-                        lang().get(
-                                "auction.sold",
-                                "player",
-                                buyer.getName()
-                        )
-                );
-
-                onlineSeller.sendMessage(
-                        lang().get(
-                                "auction.received-money",
-                                "price",
-                                economyManager.format(price)
-                        )
-                );
-            }
-
-            buyer.closeInventory();
-
-        } catch (SQLException exception) {
-
-            buyer.sendMessage(lang().get("auction.database-error"));
-
-            plugin.getLogger().severe(
-                    "Auction purchase error: "
-                            + exception.getMessage()
             );
 
         } catch (RuntimeException exception) {
 
-            buyer.sendMessage(lang().get("auction.general-error"));
-
             plugin.getLogger().severe(
-                    "Auction runtime error: "
-                            + exception.getMessage()
+                    "Item delivery failed for listing "
+                            + listingId + ": " + exception.getMessage()
             );
 
-        } finally {
+            buyer.sendMessage(
+                    lang().get("auction.delivery-error")
+            );
 
-            processing.remove(listingId);
+            return;
         }
-    }
 
-    private void refundBuyer(
-            Player buyer,
-            int listingId,
-            double amount,
-            String reason
-    ) {
+        buyer.sendMessage(
+                lang().get(
+                        "auction.purchase-success",
+                        "price",
+                        economyManager.format(price)
+                )
+        );
 
-        boolean refunded = economyManager.deposit(buyer, amount);
+        Player onlineSeller = Bukkit.getPlayer(sellerUUID);
 
-        if (!refunded) {
+        if (onlineSeller != null) {
 
-            logRecovery(
-                    listingId,
-                    buyer.getUniqueId(),
-                    amount,
-                    reason + " Refund failed."
+            onlineSeller.sendMessage(
+                    lang().get(
+                            "auction.sold",
+                            "player",
+                            buyer.getName()
+                    )
+            );
+
+            onlineSeller.sendMessage(
+                    lang().get(
+                            "auction.received-money",
+                            "price",
+                            economyManager.format(price)
+                    )
             );
         }
+
+        buyer.closeInventory();
     }
 
     private boolean restoreListing(AuctionListing listing) {
@@ -515,21 +419,5 @@ public class AuctionListener implements Listener {
 
             return false;
         }
-    }
-
-    private void logRecovery(
-            int listingId,
-            UUID buyer,
-            double amount,
-            String reason
-    ) {
-
-        plugin.getLogger().severe(
-                "AUCTION TRANSACTION REQUIRES ADMIN REVIEW! "
-                        + "Listing=" + listingId
-                        + ", Buyer=" + buyer
-                        + ", Amount=" + amount
-                        + ", Reason=" + reason
-        );
     }
 }
