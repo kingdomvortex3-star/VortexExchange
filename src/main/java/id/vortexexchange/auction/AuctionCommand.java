@@ -1,176 +1,247 @@
 
 package id.vortexexchange.auction;
 
-import id.vortexexchange.util.ItemSerializer;
+import id.vortexexchange.VortexExchange;
+import id.vortexexchange.util.LanguageManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.inventory.Inventory;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.ArrayList;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.UUID;
 
-public class AuctionGUI {
+public class AuctionCommand implements CommandExecutor {
 
-    private static final int SIZE = 54;
-    private static final int ITEMS_PER_PAGE = 45;
+    private final VortexExchange plugin;
+    private final AuctionManager auctionManager;
 
-    private final Inventory inventory;
-    private final List<AuctionListing> listings;
-    private final int page;
-    private final UUID viewerUUID;
-
-    public AuctionGUI(List<AuctionListing> listings) {
-        this(listings, 0, null);
-    }
-
-    public AuctionGUI(List<AuctionListing> listings, int requestedPage) {
-        this(listings, requestedPage, null);
-    }
-
-    public AuctionGUI(
-            List<AuctionListing> listings,
-            int requestedPage,
-            UUID viewerUUID
+    public AuctionCommand(
+            VortexExchange plugin,
+            AuctionManager auctionManager
     ) {
-        this.listings = listings;
-        this.viewerUUID = viewerUUID;
-
-        int maxPage = Math.max(
-                0,
-                (listings.size() - 1) / ITEMS_PER_PAGE
-        );
-
-        this.page = Math.max(0, Math.min(requestedPage, maxPage));
-
-        this.inventory = Bukkit.createInventory(
-                null,
-                SIZE,
-                "§8§lVortex Auction House §7(" + (page + 1) + ")"
-        );
-
-        render();
+        this.plugin = plugin;
+        this.auctionManager = auctionManager;
     }
 
-    public Inventory getInventory() {
-        return inventory;
+    private LanguageManager lang() {
+        return plugin.getLanguageManager();
     }
 
-    public int getPage() {
-        return page;
-    }
-
-    public List<AuctionListing> getListings() {
-        return listings;
-    }
-
-    private void render() {
-        fillBackground();
-
-        int start = page * ITEMS_PER_PAGE;
-        int end = Math.min(
-                start + ITEMS_PER_PAGE,
-                listings.size()
-        );
-
-        for (int i = start; i < end; i++) {
-            AuctionListing listing = listings.get(i);
-
-            int slot = i - start;
-
-            ItemStack display = listing.getItem().clone();
-
-            ItemMeta meta = display.getItemMeta();
-
-            if (meta == null) {
-                continue;
-            }
-
-            List<String> lore = meta.hasLore()
-                    ? new ArrayList<>(meta.getLore())
-                    : new ArrayList<>();
-
-            lore.add("");
-            lore.add("§8§m----------------------");
-            lore.add("§7Seller: §f" + listing.getSellerName());
-            lore.add("§7Price: §a$" + listing.getPrice());
-            lore.add("");
-
-            if (viewerUUID != null
-                    && viewerUUID.equals(listing.getSellerUUID())) {
-
-                lore.add("§a§lINI BARANG MILIKMU");
-                lore.add("§eKlik untuk mengambil kembali barang ini.");
-
-            } else {
-                lore.add("§e§lKLIK UNTUK MEMBELI");
-            }
-
-            lore.add("§8§m----------------------");
-
-            meta.setLore(lore);
-            display.setItemMeta(meta);
-
-            inventory.setItem(slot, display);
-        }
-
-        inventory.setItem(45, createButton(
-                Material.ARROW,
-                "§eHalaman Sebelumnya",
-                "§7Klik untuk kembali."
-        ));
-
-        inventory.setItem(49, createButton(
-                Material.BARRIER,
-                "§cTutup",
-                "§7Klik untuk menutup menu."
-        ));
-
-        inventory.setItem(53, createButton(
-                Material.ARROW,
-                "§eHalaman Berikutnya",
-                "§7Klik untuk lanjut."
-        ));
-
-        inventory.setItem(48, createButton(
-                Material.BOOK,
-                "§bInformasi Auction House",
-                "§7Total listing: §f" + listings.size(),
-                "§7Halaman: §f" + (page + 1)
-        ));
-    }
-
-    private void fillBackground() {
-        ItemStack filler = createButton(
-                Material.GRAY_STAINED_GLASS_PANE,
-                "§7"
-        );
-
-        for (int i = 45; i < SIZE; i++) {
-            inventory.setItem(i, filler);
-        }
-    }
-
-    private ItemStack createButton(
-            Material material,
-            String name,
-            String... lore
+    @Override
+    public boolean onCommand(
+            CommandSender sender,
+            Command command,
+            String label,
+            String[] args
     ) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-
-        if (meta != null) {
-            meta.setDisplayName(name);
-
-            if (lore.length > 0) {
-                meta.setLore(List.of(lore));
-            }
-
-            item.setItemMeta(meta);
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(lang().get("player.only"));
+            return true;
         }
 
-        return item;
+        if (!player.hasPermission("vortexexchange.use")) {
+            player.sendMessage(lang().get("permission.denied"));
+            return true;
+        }
+
+        if (!plugin.getConfig().getBoolean("auction.enabled", true)) {
+            player.sendMessage(lang().get("auction.disabled"));
+            return true;
+        }
+
+        if (args.length == 0) {
+            openAuction(player);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("sell")) {
+            sellItem(player, args);
+            return true;
+        }
+
+        player.sendMessage(lang().get("auction.usage"));
+        return true;
+    }
+
+    private void openAuction(Player player) {
+        try {
+            List<AuctionListing> listings =
+                    auctionManager.getListings();
+
+            AuctionGUI gui = new AuctionGUI(
+                    listings,
+                    0,
+                    player.getUniqueId()
+            );
+
+            player.openInventory(gui.getInventory());
+
+        } catch (SQLException exception) {
+            player.sendMessage(
+                    lang().get("auction.database-error")
+            );
+
+            plugin.getLogger().severe(
+                    "Failed to load auction listings: "
+                            + exception.getMessage()
+            );
+        }
+    }
+
+    private void sellItem(Player player, String[] args) {
+
+        if (args.length != 2) {
+            player.sendMessage(lang().get("auction.usage"));
+            return;
+        }
+
+        double price;
+
+        try {
+            price = Double.parseDouble(args[1]);
+        } catch (NumberFormatException exception) {
+            player.sendMessage(lang().get("auction.invalid-price"));
+            return;
+        }
+
+        if (!Double.isFinite(price) || price <= 0) {
+            player.sendMessage(lang().get("auction.invalid-price"));
+            return;
+        }
+
+        double minimum = plugin.getConfig().getDouble(
+                "auction.minimum-price", 1
+        );
+
+        if (!Double.isFinite(minimum) || minimum < 0) {
+            minimum = 1;
+        }
+
+        if (price < minimum) {
+            player.sendMessage(
+                    lang().get(
+                            "auction.minimum",
+                            "price",
+                            String.valueOf(minimum)
+                    )
+            );
+            return;
+        }
+
+        ItemStack hand = player.getInventory().getItemInMainHand();
+
+        if (hand == null || hand.getType() == Material.AIR) {
+            player.sendMessage(lang().get("auction.hold-item"));
+            return;
+        }
+
+        int maximumListings = Math.max(
+                1,
+                plugin.getConfig().getInt(
+                        "auction.max-listings-per-player", 10
+                )
+        );
+
+        try {
+
+            if (!player.hasPermission("vortexexchange.admin")) {
+
+                int currentListings =
+                        auctionManager.getPlayerListingCount(
+                                player.getUniqueId()
+                        );
+
+                if (currentListings >= maximumListings) {
+                    player.sendMessage(lang().get("auction.limit"));
+                    return;
+                }
+            }
+
+            long duration = plugin.getConfig().getLong(
+                    "auction.listing-duration-hours", 168
+            );
+
+            if (duration <= 0
+                    || duration > Long.MAX_VALUE / 3600000L) {
+                player.sendMessage(
+                        lang().get("auction.duration-invalid")
+                );
+                return;
+            }
+
+            ItemStack item = hand.clone();
+
+            auctionManager.createListing(
+                    player.getUniqueId(),
+                    player.getName(),
+                    item,
+                    price,
+                    duration * 3600000L
+            );
+
+            player.getInventory().setItemInMainHand(null);
+
+            player.sendMessage(lang().get("auction.success"));
+
+            player.sendMessage(
+                    lang().get(
+                            "auction.price",
+                            "price",
+                            String.valueOf(price)
+                    )
+            );
+
+            broadcastListing(player, item, price);
+
+        } catch (SQLException | RuntimeException exception) {
+
+            player.sendMessage(lang().get("auction.failed"));
+
+            plugin.getLogger().severe(
+                    "Failed to create auction listing: "
+                            + exception.getMessage()
+            );
+        }
+    }
+
+    private void broadcastListing(
+            Player seller,
+            ItemStack item,
+            double price
+    ) {
+
+        String itemName = item.getType().name()
+                .toLowerCase()
+                .replace('_', ' ');
+
+        String announcement =
+                "&8&m--------------------------------\n"
+                + "&b&lVortexExchange &8» "
+                + lang().get("auction.new") + "\n"
+                + lang().get(
+                        "auction.seller",
+                        "player",
+                        seller.getName()
+                ) + "\n"
+                + lang().get(
+                        "auction.item",
+                        "amount",
+                        String.valueOf(item.getAmount()),
+                        "item",
+                        itemName
+                ) + "\n"
+                + lang().get(
+                        "auction.price",
+                        "price",
+                        String.valueOf(price)
+                ) + "\n"
+                + lang().get("auction.view") + "\n"
+                + "&8&m--------------------------------";
+
+        Bukkit.broadcastMessage(announcement);
     }
 }
