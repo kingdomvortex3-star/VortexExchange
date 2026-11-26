@@ -60,7 +60,10 @@ public class LanguageManager {
         indonesia.put("auction.listing-count", "&7Listing aktif: &b{current}&7/&b{maximum}");
 
         // AUCTION CANCEL
-        indonesia.put("auction.cancel-success", "&aListing berhasil dibatalkan! Barang dikirim ke Mailbox.");
+        indonesia.put("auction.cancel-title", "&a&lVORTEX EXCHANGE");
+        indonesia.put("auction.cancel-success", "&aListing berhasil dibatalkan!");
+        indonesia.put("auction.cancel-detail", "&7Barang kamu sedang dikembalikan melalui Mailbox.");
+        indonesia.put("auction.page-error", "&cGagal memuat halaman Auction House.");
         indonesia.put("auction.cancel-failed", "&cGagal membatalkan listing. Coba lagi.");
         indonesia.put("auction.cancel-owner-only", "&cKamu hanya bisa membatalkan listing milik sendiri.");
         indonesia.put("auction.cancel-hint", "&eKlik listing milikmu untuk membatalkan dan mengambil barang.");
@@ -168,7 +171,10 @@ public class LanguageManager {
         english.put("auction.listing-count", "&7Active listings: &b{current}&7/&b{maximum}");
 
         // AUCTION CANCEL
-        english.put("auction.cancel-success", "&aListing cancelled! Your item has been sent to your Mailbox.");
+        english.put("auction.cancel-title", "&a&lVORTEX EXCHANGE");
+        english.put("auction.cancel-success", "&aListing cancelled!");
+        english.put("auction.cancel-detail", "&7Your item is being returned through the Mailbox.");
+        english.put("auction.page-error", "&cFailed to load the Auction House page.");
         english.put("auction.cancel-failed", "&cFailed to cancel listing. Please try again.");
         english.put("auction.cancel-owner-only", "&cYou can only cancel your own listings.");
         english.put("auction.cancel-hint", "&eClick your own listing to cancel it and retrieve your item.");
@@ -253,7 +259,67 @@ public class LanguageManager {
             message = indonesia.getOrDefault(key, key);
         }
 
+        // Small-caps font for Auction House and Mailbox messages only.
+        if (key.startsWith("auction.") || key.startsWith("mailbox.")) {
+            message = toSmallCaps(message);
+        }
+
         return ChatColor.translateAlternateColorCodes('&', message);
+    }
+
+    private String toSmallCaps(String input) {
+        final String normal = "abcdefghijklmnopqrstuvwxyz";
+        final String small = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀѕᴛᴜᴠᴡxʏᴢ";
+
+        StringBuilder result = new StringBuilder(input.length());
+
+        for (int i = 0; i < input.length(); i++) {
+            char current = input.charAt(i);
+
+            // Keep color codes unchanged.
+            if (current == '&' || current == '§') {
+                result.append(current);
+
+                if (i + 1 < input.length()) {
+                    result.append(input.charAt(++i));
+                }
+
+                continue;
+            }
+
+            // Keep placeholders unchanged.
+            if (current == '{') {
+                while (i < input.length()) {
+                    char placeholderChar = input.charAt(i++);
+                    result.append(placeholderChar);
+
+                    if (placeholderChar == '}') {
+                        break;
+                    }
+                }
+
+                i--;
+                continue;
+            }
+
+            // Keep commands unchanged.
+            if (current == '/') {
+                while (i < input.length()
+                        && !Character.isWhitespace(input.charAt(i))) {
+                    result.append(input.charAt(i++));
+                }
+
+                i--;
+                continue;
+            }
+
+            char lower = Character.toLowerCase(current);
+            int index = normal.indexOf(lower);
+
+            result.append(index >= 0 ? small.charAt(index) : current);
+        }
+
+        return result.toString();
     }
 
     public String get(String key, String... replacements) {
