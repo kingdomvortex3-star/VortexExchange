@@ -134,7 +134,7 @@ public class AuctionListener implements Listener {
             );
 
             player.sendMessage(
-                    "§cGagal memuat halaman Auction House."
+                    lang().get("auction.page-error")
             );
         }
     }
@@ -205,15 +205,15 @@ public class AuctionListener implements Listener {
             player.closeInventory();
 
             player.sendMessage(
-                    "§a§lVORTEX EXCHANGE"
+                    lang().get("auction.cancel-title")
             );
 
             player.sendMessage(
-                    "§aListing berhasil dibatalkan!"
+                    lang().get("auction.cancel-success")
             );
 
             player.sendMessage(
-                    "§7Barang kamu sedang dikembalikan melalui Mailbox."
+                    lang().get("auction.cancel-detail")
             );
 
             plugin.getMailboxManager().deliver(player);
@@ -221,7 +221,7 @@ public class AuctionListener implements Listener {
         } catch (SQLException exception) {
 
             player.sendMessage(
-                    "§cGagal membatalkan listing. Silakan coba lagi."
+                    lang().get("auction.cancel-failed")
             );
 
             plugin.getLogger().severe(
